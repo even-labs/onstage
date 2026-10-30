@@ -6,6 +6,7 @@ import {
   PencilIcon,
   SmartphoneIcon,
 } from "lucide-react"
+import { useAuiState } from "@assistant-ui/react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -16,12 +17,11 @@ import {
   usePlayground,
   type Viewport,
 } from "@/components/playground/playground-provider"
-import { INTENT_STATUS } from "@/lib/mock-agent"
 import { canPublish, slugify } from "@/lib/release"
 
 export function BuilderToolbar() {
-  const { release, mode, setMode, viewport, setViewport, pending } =
-    usePlayground()
+  const { release, mode, setMode, viewport, setViewport } = usePlayground()
+  const running = useAuiState((s) => s.thread.isRunning)
   const publishable = canPublish(release)
   const isDraft =
     release.aiFields.length > 0 ||
@@ -40,10 +40,10 @@ export function BuilderToolbar() {
         {mode === "publish" ? "Fan view" : "Backstage"} ·{" "}
         {release.title || "New release"}
       </span>
-      {pending ? (
+      {running ? (
         <AiTag>
           <LoaderCircleIcon className="size-3 animate-spin" />
-          {INTENT_STATUS[pending]}
+          Claude is working
         </AiTag>
       ) : (
         mode === "edit" &&

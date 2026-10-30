@@ -12,7 +12,13 @@ export const isImageFile = (file: File) => file.type.startsWith("image/")
 /** Registers a dropped file and describes it the way the agent expects. */
 export function registerAsset(file: File): Promise<DroppedFile> {
   const dropped: DroppedFile = { name: file.name, kind: kindOf(file) }
-  if (dropped.kind === "text") return Promise.resolve(dropped)
+  if (dropped.kind === "text") {
+    // Notes go to the agent as text, so the AI can keep the artist's voice.
+    if (!file.type.startsWith("text/")) return Promise.resolve(dropped)
+    return file
+      .text()
+      .then((content) => ({ ...dropped, content: content.slice(0, 20_000) }))
+  }
 
   const url = URL.createObjectURL(file)
   urls.set(file.name, url)
@@ -38,7 +44,11 @@ function readDuration(url: string): Promise<string | undefined> {
       if (settled) return
       settled = true
       audio.removeAttribute("src")
-      resolve(seconds && Number.isFinite(seconds) ? formatDuration(seconds) : undefined)
+      resolve(
+        seconds && Number.isFinite(seconds)
+          ? formatDuration(seconds)
+          : undefined
+      )
     }
     audio.preload = "metadata"
     audio.onloadedmetadata = () => done(audio.duration)

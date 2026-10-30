@@ -70,11 +70,17 @@ Page slots:
 Stack: Next.js 16 (App Router) + shadcn/ui (`base-nova` preset, Base UI primitives, so
 components take `render` instead of `asChild`) + Tailwind v4, managed with pnpm. Next 16 has
 breaking changes: read @AGENTS.md before writing Next code. The playground lives in
-`components/playground/` (agent chat in the sidebar, release page on the right) and runs on
-mock data from `lib/mock-data.ts`; `lib/mock-agent.ts` stands in for the Claude call.
-Still undecided: whether the real AI call runs from a claude.ai artifact (no API key) or a
-server route with an API key. Never put an API key in client code or commit it; use an env
-var and keep .env out of git.
+`components/playground/` (agent chat in the sidebar, release page on the right); invented
+data lives in `lib/mock-data.ts`.
+
+The AI call runs server-side: the sidebar chat is assistant-ui (`Thread` in
+`components/assistant-ui/`, copied from its shadcn registry) on the Vercel AI SDK, talking to
+`app/api/chat/route.ts`, which calls Claude through `@ai-sdk/anthropic`. Claude changes the
+page through one browser tool, `update_release` (`components/playground/agent-runtime.tsx`),
+whose Zod schema is the JSON contract below (`aiDraftSchema` in `lib/release.ts`); the page
+state and dropped files reach the model as client context. `ANTHROPIC_API_KEY` and the
+optional `ANTHROPIC_MODEL` go in `.env.local`. Never put an API key in client code or commit
+it. "Load the saved draft" on the empty page fills it from `LUMA_VALE_DRAFT` without a call.
 
 ## AI first-pass contract
 

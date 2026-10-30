@@ -1,3 +1,5 @@
+import { z } from "zod"
+
 /** A file the artist dropped (or the mock pretends they did). */
 export type DroppedFile = {
   name: string
@@ -6,32 +8,64 @@ export type DroppedFile = {
   duration?: string
   /** Object URL of a real dropped image or audio file (see lib/assets.ts). */
   url?: string
-}
-
-export type Tier = {
-  name: string
-  price_usd: number
-  includes: string[]
+  /** Text files only: what the artist wrote, passed to the AI as notes. */
+  content?: string
 }
 
 /** What the Claude first pass returns. Mirrors the contract in CLAUDE.md. */
-export type AiDraft = {
-  title: string
-  artist: string
-  description: string
-  cover: string
-  photos: string[]
-  tracks: { file: string; title: string; position: number }[]
-  extras: {
-    name: string
-    description: string
-    why_it_fits: string
-    tier: string
-  }[]
-  tiers: Tier[]
-  /** Not in the CLAUDE.md contract yet: doubts the artist resolves in place. */
-  questions?: string[]
-}
+export const aiDraftSchema = z.object({
+  title: z.string().describe("Release title"),
+  artist: z.string().describe("Artist name"),
+  description: z.string().describe("2-3 sentences in the artist's voice"),
+  cover: z.string().describe("Exact file name of the image used as the cover"),
+  photos: z
+    .array(z.string())
+    .describe("Exact file names of the other images, in display order"),
+  tracks: z
+    .array(
+      z.object({
+        file: z.string().describe("Exact audio file name"),
+        title: z.string().describe("Clean title fans will see"),
+        position: z
+          .number()
+          .int()
+          .describe("1-based position in the tracklist"),
+      })
+    )
+    .describe("Every track, in the order fans will hear them"),
+  extras: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string().describe("One line: what fans get"),
+        why_it_fits: z.string().describe("One line tied to this record"),
+        tier: z.string().describe("Name of the tier that first includes it"),
+      })
+    )
+    .describe("Two or three extras that fit this specific record"),
+  tiers: z
+    .array(
+      z.object({
+        name: z.string(),
+        price_usd: z.number().positive(),
+        includes: z
+          .array(z.string())
+          .describe('"the record" plus the names of the extras it unlocks'),
+      })
+    )
+    .describe(
+      "Two or three tiers; the base tier is the record alone, cheapest"
+    ),
+  // Not in the CLAUDE.md contract yet: doubts the artist resolves in place.
+  questions: z
+    .array(z.string())
+    .describe("Short doubts for the artist to resolve on the page")
+    .optional(),
+})
+
+export type AiDraft = z.infer<typeof aiDraftSchema>
+
+export type Tier = AiDraft["tiers"][number]
 
 export type Track = {
   file: string
@@ -92,39 +126,54 @@ export function toExtras(draftExtras: AiDraft["extras"]): Extra[] {
   }))
 }
 
-export function releaseFromDraft(
-  draft: AiDraft,
-  files: DroppedFile[],
-  releaseDate: string
+/**
+ * Merges what the AI sent into the release. A first pass sends every field;
+ * a later edit sends only the fields it changes, and the rest stay as they are.
+ */
+export function applyDraft(
+  release: Release,
+  draft: Partial<AiDraft>,
+  files: DroppedFile[]
 ): Release {
-  const durations = new Map(files.map((f) => [f.name, f.duration ?? ""]))
-  const tracks = [...draft.tracks]
-    .sort((a, b) => a.position - b.position)
-    .map((t) => ({
-      file: t.file,
-      title: t.title,
-      duration: durations.get(t.file) ?? "",
-      bonus: /voice memo|demo|bonus/i.test(t.title),
-    }))
+  const next = { ...release }
+  const aiFields = new Set(release.aiFields)
 
-  return {
-    title: draft.title,
-    artist: draft.artist,
-    description: draft.description,
-    releaseDate,
-    cover: draft.cover,
-    photos: draft.photos,
-    tracks,
-    extras: toExtras(draft.extras),
-    tiers: draft.tiers,
-    questions: draft.questions ?? [],
-    aiFields: [
-      "title",
-      "artist",
-      "description",
-      ...tracks.map((t) => trackField(t.file)),
-    ],
+  for (const field of ["title", "artist", "description"] as const) {
+    const value = draft[field]
+    if (value === undefined) continue
+    next[field] = value
+    aiFields.add(field)
   }
+  if (draft.cover !== undefined) next.cover = draft.cover || null
+  if (draft.photos) next.photos = draft.photos
+  if (draft.tracks) {
+    const durations = new Map(files.map((f) => [f.name, f.duration]))
+    const previous = new Map(release.tracks.map((t) => [t.file, t]))
+    next.tracks = [...draft.tracks]
+      .sort((a, b) => a.position - b.position)
+      .map((t) => ({
+        file: t.file,
+        title: t.title,
+        duration: durations.get(t.file) ?? previous.get(t.file)?.duration ?? "",
+        bonus:
+          previous.get(t.file)?.bonus ?? /voice memo|demo|bonus/i.test(t.title),
+      }))
+    for (const t of release.tracks) aiFields.delete(trackField(t.file))
+    for (const t of next.tracks) aiFields.add(trackField(t.file))
+  }
+  if (draft.extras) {
+    // Keep the artist's Keep/Remove decisions on extras the AI sends again.
+    const decided = new Map(release.extras.map((e) => [e.name, e.status]))
+    next.extras = toExtras(draft.extras).map((e) => ({
+      ...e,
+      status: decided.get(e.name) ?? e.status,
+    }))
+  }
+  if (draft.tiers) next.tiers = draft.tiers
+  if (draft.questions) next.questions = draft.questions
+
+  next.aiFields = [...aiFields]
+  return next
 }
 
 export const trackField = (file: string) => `track:${file}`

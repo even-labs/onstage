@@ -1,4 +1,5 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { AgentRuntime } from "@/components/playground/agent-runtime"
 import { AgentSidebar } from "@/components/playground/agent-sidebar"
 import { BuilderToolbar } from "@/components/playground/builder-toolbar"
 import { PlaygroundProvider } from "@/components/playground/playground-provider"
@@ -11,11 +12,13 @@ export function Playground() {
       style={{ "--sidebar-width": "22rem" } as React.CSSProperties}
     >
       <PlaygroundProvider>
-        <AgentSidebar />
-        <SidebarInset className="h-svh overflow-hidden">
-          <BuilderToolbar />
-          <ReleaseCanvas />
-        </SidebarInset>
+        <AgentRuntime>
+          <AgentSidebar />
+          <SidebarInset className="h-svh overflow-hidden">
+            <BuilderToolbar />
+            <ReleaseCanvas />
+          </SidebarInset>
+        </AgentRuntime>
       </PlaygroundProvider>
     </SidebarProvider>
   )

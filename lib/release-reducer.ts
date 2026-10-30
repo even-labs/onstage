@@ -1,20 +1,20 @@
 import {
+  applyDraft,
   emptyRelease,
-  toExtras,
   trackField,
   type AiDraft,
+  type DroppedFile,
   type Extra,
   type ExtraStatus,
   type Release,
-  type Tier,
 } from "@/lib/release"
 
 type TextField = "title" | "artist" | "description"
 
 export type ReleaseAction =
-  | { type: "load"; release: Release }
+  | { type: "applyDraft"; draft: Partial<AiDraft>; files: DroppedFile[] }
   | { type: "reset" }
-  | { type: "edit"; field: TextField; value: string; by?: "ai" }
+  | { type: "edit"; field: TextField; value: string }
   | { type: "setReleaseDate"; value: string }
   | { type: "setCover"; file: string }
   | { type: "addPhotos"; files: string[] }
@@ -27,19 +27,18 @@ export type ReleaseAction =
       id: string
       patch: Partial<Pick<Extra, "name" | "description">>
     }
-  | { type: "replaceExtras"; extras: AiDraft["extras"]; tiers: Tier[] }
   | { type: "setTierPrice"; name: string; price: number }
   | { type: "resolveQuestion"; index: number }
 
-function markAi(aiFields: string[], field: string, by?: "ai") {
-  const rest = aiFields.filter((f) => f !== field)
-  return by === "ai" ? [...rest, field] : rest
+/** The artist touched this field, so it no longer counts as AI-written. */
+function unmarkAi(aiFields: string[], field: string) {
+  return aiFields.filter((f) => f !== field)
 }
 
 export function releaseReducer(state: Release, action: ReleaseAction): Release {
   switch (action.type) {
-    case "load":
-      return action.release
+    case "applyDraft":
+      return applyDraft(state, action.draft, action.files)
 
     case "reset":
       return emptyRelease
@@ -48,7 +47,7 @@ export function releaseReducer(state: Release, action: ReleaseAction): Release {
       return {
         ...state,
         [action.field]: action.value,
-        aiFields: markAi(state.aiFields, action.field, action.by),
+        aiFields: unmarkAi(state.aiFields, action.field),
       }
 
     case "setReleaseDate":
@@ -72,7 +71,7 @@ export function releaseReducer(state: Release, action: ReleaseAction): Release {
         tracks: state.tracks.map((t) =>
           t.file === action.file ? { ...t, title: action.title } : t
         ),
-        aiFields: markAi(state.aiFields, trackField(action.file)),
+        aiFields: unmarkAi(state.aiFields, trackField(action.file)),
       }
 
     case "moveTrack": {
@@ -116,13 +115,6 @@ export function releaseReducer(state: Release, action: ReleaseAction): Release {
         })),
       }
     }
-
-    case "replaceExtras":
-      return {
-        ...state,
-        extras: toExtras(action.extras),
-        tiers: action.tiers,
-      }
 
     case "setTierPrice":
       return {

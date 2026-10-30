@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useAuiState } from "@assistant-ui/react"
 import { GripVerticalIcon, LockIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,14 +13,15 @@ import { cn } from "@/lib/utils"
 const TRACK_DRAG_TYPE = "application/x-onstage-track"
 
 export function TrackList() {
-  const { release, mode, pending, dispatch } = usePlayground()
+  const { release, mode, dispatch } = usePlayground()
+  const running = useAuiState((s) => s.thread.isRunning)
   const editing = mode === "edit"
   const [dragFrom, setDragFrom] = React.useState<number | null>(null)
   const [dropAt, setDropAt] = React.useState<number | null>(null)
 
   if (!release.tracks.length) {
     return editing ? (
-      <Slot pending={pending === "draft"}>
+      <Slot pending={running}>
         Tracks appear here in the order fans will see them
       </Slot>
     ) : null

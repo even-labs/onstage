@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useAuiState } from "@assistant-ui/react"
 import {
   CheckIcon,
   LibraryIcon,
@@ -16,11 +17,11 @@ import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AiTag, Wordmark } from "@/components/playground/brand"
+import { useAgent } from "@/components/playground/agent-runtime"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
 import { Slot, TrackList } from "@/components/playground/track-list"
 import { assetUrl, isImageFile, registerAssets } from "@/lib/assets"
-import { DROP_PROMPT } from "@/lib/mock-agent"
 import { DEMO_FILES, FALLBACK_ART, MOCK_ART } from "@/lib/mock-data"
 import {
   FAN_BENEFITS,
@@ -148,14 +149,16 @@ function FanNav() {
 }
 
 function ReleasePage() {
-  const { release, mode, pending, sendToAgent } = usePlayground()
+  const { release, mode } = usePlayground()
+  const { sendFiles } = useAgent()
+  const running = useAuiState((s) => s.thread.isRunning)
   const editing = mode === "edit"
   const [overlayDismissed, setOverlayDismissed] = React.useState(false)
   const [draggingFiles, setDraggingFiles] = React.useState(false)
   // Once the page has content, a file drag no longer raises the overlay, so
   // the cover and photo slots can take drops of their own.
   const showOverlay =
-    editing && !pending && isEmpty(release) && !overlayDismissed
+    editing && !running && isEmpty(release) && !overlayDismissed
 
   // Track reordering is also a drag, so only react to drags that carry files.
   const fileDrag = (e: React.DragEvent) => editing && hasFiles(e)
@@ -178,7 +181,7 @@ function ReleasePage() {
         if (!fileDrag(e)) return
         e.preventDefault()
         setDraggingFiles(false)
-        sendToAgent(DROP_PROMPT, await registerAssets(e.dataTransfer.files))
+        sendFiles(await registerAssets(e.dataTransfer.files))
       }}
     >
       {release.cover && (
@@ -233,9 +236,9 @@ function ReleasePage() {
 }
 
 function Hero() {
-  const { release, mode, pending, dispatch } = usePlayground()
+  const { release, mode, dispatch } = usePlayground()
   const editing = mode === "edit"
-  const drafting = pending === "draft"
+  const running = useAuiState((s) => s.thread.isRunning)
   const price = minPrice(release.tiers)
   const trackCount = release.tracks.length
 
@@ -253,7 +256,7 @@ function Hero() {
           placeholder="Release title"
           editable={editing}
           ai={release.aiFields.includes("title")}
-          pending={drafting}
+          pending={running}
           onCommit={(value) =>
             dispatch({ type: "edit", field: "title", value })
           }
@@ -267,7 +270,7 @@ function Hero() {
             placeholder="Artist name"
             editable={editing}
             ai={release.aiFields.includes("artist")}
-            pending={drafting}
+            pending={running}
             onCommit={(value) =>
               dispatch({ type: "edit", field: "artist", value })
             }
@@ -307,7 +310,7 @@ function Hero() {
           editable={editing}
           multiline
           ai={release.aiFields.includes("description")}
-          pending={drafting || pending === "description"}
+          pending={running}
           onCommit={(value) =>
             dispatch({ type: "edit", field: "description", value })
           }
@@ -319,8 +322,7 @@ function Hero() {
         <Button
           className={cn(
             "mt-1 justify-self-start",
-            price === null && "opacity-40",
-            pending === "price" && "animate-pulse"
+            price === null && "opacity-40"
           )}
           onClick={() => {
             if (!editing) toast("Checkout is faked in the playground")
@@ -334,7 +336,8 @@ function Hero() {
 }
 
 function CoverArt() {
-  const { release, mode, pending, dispatch } = usePlayground()
+  const { release, mode, dispatch } = usePlayground()
+  const running = useAuiState((s) => s.thread.isRunning)
   const editing = mode === "edit"
 
   async function setCover(images: File[]) {
@@ -352,7 +355,7 @@ function CoverArt() {
     return editing ? (
       <>
         <Slot
-          pending={pending === "draft"}
+          pending={running}
           role="button"
           tabIndex={0}
           aria-label="Add cover art"
@@ -480,13 +483,11 @@ function Photos() {
 }
 
 function SuggestedExtras() {
-  const { release, pending } = usePlayground()
+  const { release } = usePlayground()
   if (!release.extras.length) return null
 
   return (
-    <section
-      className={cn("grid gap-2.5", pending === "extras" && "animate-pulse")}
-    >
+    <section className="grid gap-2.5">
       <h3 className="flex flex-wrap items-center gap-2 text-[13px] font-semibold">
         <AiTag>Suggested extras</AiTag>
         <span className="font-normal text-muted-foreground">
@@ -617,14 +618,13 @@ function Questions() {
 }
 
 function AccessTiers() {
-  const { release, mode, pending, dispatch } = usePlayground()
+  const { release, mode, dispatch } = usePlayground()
   const editing = mode === "edit"
+  const running = useAuiState((s) => s.thread.isRunning)
 
   if (!release.tiers.length) {
     return editing ? (
-      <Slot pending={pending === "draft"}>
-        Tiers appear here: what each price unlocks
-      </Slot>
+      <Slot pending={running}>Tiers appear here: what each price unlocks</Slot>
     ) : null
   }
 
@@ -639,12 +639,7 @@ function AccessTiers() {
   const tiers = [...release.tiers].sort((a, b) => a.price_usd - b.price_usd)
 
   return (
-    <div
-      className={cn(
-        "grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5",
-        pending === "price" && "animate-pulse"
-      )}
-    >
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5">
       {tiers.map((tier) => (
         <div
           key={tier.name}
@@ -698,13 +693,12 @@ function AccessTiers() {
 }
 
 function Includes() {
-  const { release, mode, pending } = usePlayground()
+  const { release, mode } = usePlayground()
+  const running = useAuiState((s) => s.thread.isRunning)
 
   if (isEmpty(release)) {
     return mode === "edit" ? (
-      <Slot pending={pending === "draft"}>
-        What fans get: streaming, offline, download
-      </Slot>
+      <Slot pending={running}>What fans get: streaming, offline, download</Slot>
     ) : null
   }
 
@@ -737,14 +731,18 @@ function DropOverlay({
   dragging: boolean
   onDismiss: () => void
 }) {
-  const { sendToAgent, composerRef } = usePlayground()
+  const { sendFiles, loadSavedDraft } = useAgent()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
 
   function describeInstead() {
     if (isMobile) setOpenMobile(true)
     else setOpen(true)
     // Give the sidebar a moment to slide in before focusing the composer.
-    setTimeout(() => composerRef.current?.focus(), 250)
+    setTimeout(() => {
+      document
+        .querySelector<HTMLTextAreaElement>('[aria-label="Message input"]')
+        ?.focus()
+    }, 250)
   }
 
   return (
@@ -765,19 +763,30 @@ function DropOverlay({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => sendToAgent(DROP_PROMPT, DEMO_FILES)}
+                onClick={() => sendFiles(DEMO_FILES)}
               >
                 Use demo files
               </Button>
             </div>
-            <Button
-              variant="link"
-              size="xs"
-              className="text-muted-foreground"
-              onClick={onDismiss}
-            >
-              Fill it in by hand
-            </Button>
+            <div className="flex flex-wrap justify-center">
+              <Button
+                variant="link"
+                size="xs"
+                className="text-muted-foreground"
+                onClick={onDismiss}
+              >
+                Fill it in by hand
+              </Button>
+              <Button
+                variant="link"
+                size="xs"
+                className="text-muted-foreground"
+                title="Fills the page with a saved first pass, without calling Claude"
+                onClick={loadSavedDraft}
+              >
+                Load the saved draft
+              </Button>
+            </div>
           </>
         )}
       </div>

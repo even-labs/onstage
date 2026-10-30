@@ -10,6 +10,7 @@ type EditableTextProps = {
   multiline?: boolean
   /** Written by the AI and not yet touched by the artist. */
   ai?: boolean
+  /** The agent is working: empty slots shimmer until it fills them. */
   pending?: boolean
   className?: string
 }
@@ -65,7 +66,7 @@ export function EditableText({
         className,
         !value &&
           "rounded-md border-[1.5px] border-dashed px-3 py-2 text-sm leading-normal font-normal tracking-normal outline-none focus:border-ai",
-        pending && "animate-pulse border-ai/60"
+        pending && !value && "animate-pulse border-ai/60"
       )}
     >
       {value}

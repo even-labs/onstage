@@ -1,4 +1,4 @@
-import type { AiDraft, DroppedFile, Tier } from "@/lib/release"
+import type { AiDraft, DroppedFile } from "@/lib/release"
 
 // Invented artist and release. No real fan data anywhere in this file.
 
@@ -18,10 +18,20 @@ export const DEMO_FILES: DroppedFile[] = [
     duration: "4:05",
   },
   { name: "voice memo 2am.m4a", kind: "audio", duration: "1:12" },
-  { name: "notes.txt", kind: "text" },
+  {
+    name: "notes.txt",
+    kind: "text",
+    content: [
+      "night bus home - EP, out nov 20",
+      "wrote all of these on the N12 after shows, between the last stop and my door.",
+      "ultima parada is the spanish one, it was always meant to have the accent.",
+      "the voice memo is the first take of night bus home, 2am, phone on the window.",
+      "the notebook has every lyric, coffee stains and all. people keep asking for it.",
+    ].join("\n"),
+  },
 ]
 
-/** A saved Claude response for the demo files. Also the fallback if a real call fails. */
+/** A saved first pass for the demo files: the fallback when the Claude call can't run. */
 export const LUMA_VALE_DRAFT: AiDraft = {
   title: "Night Bus Home",
   artist: "Luma Vale",
@@ -88,56 +98,6 @@ export const LUMA_VALE_DRAFT: AiDraft = {
   ],
 }
 
-export const ALT_EXTRAS: { extras: AiDraft["extras"]; tiers: Tier[] } = {
-  extras: [
-    {
-      name: "Window Seat (acoustic)",
-      description: "A one-take acoustic version recorded on the actual bus.",
-      why_it_fits: "Fans keep asking for stripped-down versions.",
-      tier: "Collector",
-    },
-    {
-      name: "Tour bus postcard set",
-      description:
-        "Five postcards from the photos, mailed with a handwritten line.",
-      why_it_fits:
-        "You have three tour photos that already look like postcards.",
-      tier: "Collector",
-    },
-    {
-      name: "Soundcheck Q&A",
-      description: "A 30-minute video call before the next show, 20 fans.",
-      why_it_fits: "Small rooms sell out first for you.",
-      tier: "Front row",
-    },
-  ],
-  tiers: [
-    { name: "Listen", price_usd: 7, includes: ["the record"] },
-    {
-      name: "Collector",
-      price_usd: 15,
-      includes: [
-        "the record",
-        "Window Seat (acoustic)",
-        "Tour bus postcard set",
-      ],
-    },
-    {
-      name: "Front row",
-      price_usd: 30,
-      includes: [
-        "the record",
-        "Window Seat (acoustic)",
-        "Tour bus postcard set",
-        "Soundcheck Q&A",
-      ],
-    },
-  ],
-}
-
-export const SHORT_DESCRIPTION =
-  "Songs from the night bus, written between the last stop and home."
-
 /** Stand-ins for real images: one gradient per mock file name. */
 export const MOCK_ART: Record<string, string> = {
   "night-bus-cover_FINAL.jpg":
@@ -151,14 +111,22 @@ export const MOCK_ART: Record<string, string> = {
 
 export const FALLBACK_ART = "linear-gradient(160deg, #3f3f46, #18181b 70%)"
 
-export const SUGGESTED_PROMPTS = {
-  start: [
-    "A 5-song EP about riding the night bus home after shows, out Nov 20",
-  ],
-  draft: [
-    "Suggest other extras",
-    "Make the description shorter",
-    "Lower the base price",
-    "Start over",
-  ],
-}
+/** Starter prompts shown in the empty chat (assistant-ui `ThreadSuggestion`s). */
+export const SUGGESTED_PROMPTS = [
+  {
+    title: "Describe a release",
+    label: "a 5-song EP about the night bus home, out Nov 20",
+    prompt:
+      "A 5-song EP about riding the night bus home after shows, out Nov 20. Lay out the page.",
+  },
+  {
+    title: "Suggest other extras",
+    label: "that fit this record",
+    prompt: "Suggest other extras that fit this record.",
+  },
+  {
+    title: "Tighten the copy",
+    label: "make the description shorter",
+    prompt: "Make the description shorter.",
+  },
+]
