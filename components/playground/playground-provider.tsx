@@ -1,10 +1,18 @@
 "use client"
 
 import * as React from "react"
+import { toast } from "sonner"
 
+import { clearDraft, loadDraft, saveDraft as persistDraft } from "@/lib/draft"
 import { detectIntent, runMockAgent, type AgentIntent } from "@/lib/mock-agent"
 import { emptyRelease, type DroppedFile, type Release } from "@/lib/release"
 import { releaseReducer, type ReleaseAction } from "@/lib/release-reducer"
+
+const formatSavedAt = (iso: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso))
 
 export type ChatMessage = {
   id: string
@@ -24,6 +32,8 @@ type PlaygroundContextValue = {
   pending: AgentIntent | null
   sendToAgent: (text: string, files?: DroppedFile[]) => Promise<void>
   startOver: () => void
+  /** Keeps the release in this browser's storage; comes back on the next load. */
+  saveDraft: () => void
   mode: Mode
   setMode: (mode: Mode) => void
   viewport: Viewport
@@ -76,9 +86,28 @@ export function PlaygroundProvider({
 
   function startOver() {
     dispatch({ type: "reset" })
+    clearDraft()
     setMessages([])
     setMode("edit")
   }
+
+  function saveDraft() {
+    const saved = persistDraft(release)
+    if (saved) toast.success("Draft saved in this browser")
+    else toast.error("Could not save the draft in this browser")
+  }
+
+  // A draft saved earlier in this browser comes back on load. The ref keeps
+  // Strict Mode's second effect run from restoring (and toasting) twice.
+  const restored = React.useRef(false)
+  React.useEffect(() => {
+    if (restored.current) return
+    restored.current = true
+    const draft = loadDraft()
+    if (!draft) return
+    dispatch({ type: "load", release: draft.release })
+    toast(`Draft restored (saved ${formatSavedAt(draft.savedAt)})`)
+  }, [])
 
   return (
     <PlaygroundContext.Provider
@@ -89,6 +118,7 @@ export function PlaygroundProvider({
         pending,
         sendToAgent,
         startOver,
+        saveDraft,
         mode,
         setMode,
         viewport,

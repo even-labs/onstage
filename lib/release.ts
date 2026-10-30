@@ -162,6 +162,34 @@ export function formatDate(iso: string) {
   }).format(new Date(iso))
 }
 
+/**
+ * A track title from a messy file name: "03_window seat MIX v2.wav" becomes
+ * "Window Seat". The AI pass does this better; this is the by-hand version.
+ */
+export function cleanTitle(fileName: string) {
+  const noise = /^(master|mix|final|v\d+|\d+bit|\d{1,2})$/i
+  const words = fileName
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/[()[\]]/g, " ")
+    .split(/[\s_-]+/)
+    .filter((word) => word && !noise.test(word))
+  return words
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
+/** Tracks for audio files the artist dropped on the list, without the AI. */
+export function tracksFromFiles(files: DroppedFile[]): Track[] {
+  return files
+    .filter((f) => f.kind === "audio")
+    .map((f) => ({
+      file: f.name,
+      title: cleanTitle(f.name) || f.name,
+      duration: f.duration ?? "",
+      bonus: /voice memo|demo|bonus/i.test(f.name),
+    }))
+}
+
 export function slugify(text: string) {
   return text
     .normalize("NFD")

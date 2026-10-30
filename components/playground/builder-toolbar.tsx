@@ -20,7 +20,7 @@ import { INTENT_STATUS } from "@/lib/mock-agent"
 import { canPublish, slugify } from "@/lib/release"
 
 export function BuilderToolbar() {
-  const { release, mode, setMode, viewport, setViewport, pending } =
+  const { release, mode, setMode, viewport, setViewport, pending, saveDraft } =
     usePlayground()
   const publishable = canPublish(release)
   const isDraft =
@@ -78,7 +78,7 @@ export function BuilderToolbar() {
               variant="outline"
               size="sm"
               className="hidden sm:inline-flex"
-              onClick={() => toast("Draft saved")}
+              onClick={saveDraft}
             >
               Save draft
             </Button>

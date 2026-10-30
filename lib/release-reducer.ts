@@ -2,7 +2,9 @@ import {
   emptyRelease,
   toExtras,
   trackField,
+  tracksFromFiles,
   type AiDraft,
+  type DroppedFile,
   type Extra,
   type ExtraStatus,
   type Release,
@@ -18,6 +20,7 @@ export type ReleaseAction =
   | { type: "setReleaseDate"; value: string }
   | { type: "setCover"; file: string }
   | { type: "addPhotos"; files: string[] }
+  | { type: "addTracks"; files: DroppedFile[] }
   | { type: "renameTrack"; file: string; title: string }
   | { type: "moveTrack"; from: number; to: number }
   | { type: "toggleBonus"; file: string }
@@ -65,6 +68,16 @@ export function releaseReducer(state: Release, action: ReleaseAction): Release {
           ...action.files.filter((f) => !state.photos.includes(f)),
         ],
       }
+
+    case "addTracks": {
+      const known = new Set(state.tracks.map((t) => t.file))
+      const added = tracksFromFiles(action.files).filter(
+        (t) => !known.has(t.file)
+      )
+      return added.length
+        ? { ...state, tracks: [...state.tracks, ...added] }
+        : state
+    }
 
     case "renameTrack":
       return {

@@ -6,6 +6,8 @@ import { GripVerticalIcon, LockIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
+import { useFileDrop } from "@/components/playground/use-file-drop"
+import { isAudioFile, registerAssets } from "@/lib/assets"
 import { trackField } from "@/lib/release"
 import { cn } from "@/lib/utils"
 
@@ -17,10 +19,25 @@ export function TrackList() {
   const [dragFrom, setDragFrom] = React.useState<number | null>(null)
   const [dropAt, setDropAt] = React.useState<number | null>(null)
 
+  // Audio dropped on the list becomes tracks right away, no agent involved.
+  const audioDrop = useFileDrop({
+    accept: isAudioFile,
+    onFiles: async (files) =>
+      dispatch({ type: "addTracks", files: await registerAssets(files) }),
+    hint: "Drop audio files here, or drop everything on the page",
+  })
+  const audioDropProps = editing ? audioDrop.handlers : undefined
+
   if (!release.tracks.length) {
     return editing ? (
-      <Slot pending={pending === "draft"}>
+      <Slot
+        pending={pending === "draft"}
+        className={cn(audioDrop.over && "border-ai bg-ai-muted/30")}
+        {...audioDropProps}
+      >
         Tracks appear here in the order fans will see them
+        <br />
+        <span className="text-xs">drop audio files here</span>
       </Slot>
     ) : null
   }
@@ -34,9 +51,14 @@ export function TrackList() {
 
   return (
     <ol
-      className="grid gap-0.5"
+      className={cn(
+        "grid gap-0.5 rounded-md",
+        audioDrop.over && "outline-2 outline-offset-4 outline-ai"
+      )}
+      {...audioDropProps}
       onDragOver={(e) => {
         if (dragFrom !== null) e.preventDefault()
+        else audioDropProps?.onDragOver(e)
       }}
       onDrop={(e) => {
         if (dragFrom === null || dropAt === null) return

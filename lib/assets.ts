@@ -8,6 +8,7 @@ const urls = new Map<string, string>()
 export const assetUrl = (name: string) => urls.get(name)
 
 export const isImageFile = (file: File) => file.type.startsWith("image/")
+export const isAudioFile = (file: File) => file.type.startsWith("audio/")
 
 /** Registers a dropped file and describes it the way the agent expects. */
 export function registerAsset(file: File): Promise<DroppedFile> {
@@ -25,7 +26,7 @@ export const registerAssets = (files: Iterable<File>) =>
 
 function kindOf(file: File): DroppedFile["kind"] {
   if (isImageFile(file)) return "image"
-  if (file.type.startsWith("audio/")) return "audio"
+  if (isAudioFile(file)) return "audio"
   return "text"
 }
 
@@ -38,7 +39,11 @@ function readDuration(url: string): Promise<string | undefined> {
       if (settled) return
       settled = true
       audio.removeAttribute("src")
-      resolve(seconds && Number.isFinite(seconds) ? formatDuration(seconds) : undefined)
+      resolve(
+        seconds && Number.isFinite(seconds)
+          ? formatDuration(seconds)
+          : undefined
+      )
     }
     audio.preload = "metadata"
     audio.onloadedmetadata = () => done(audio.duration)

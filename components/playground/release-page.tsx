@@ -19,6 +19,7 @@ import { AiTag, Wordmark } from "@/components/playground/brand"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
 import { Slot, TrackList } from "@/components/playground/track-list"
+import { useFileDrop } from "@/components/playground/use-file-drop"
 import { assetUrl, isImageFile, registerAssets } from "@/lib/assets"
 import { DROP_PROMPT } from "@/lib/mock-agent"
 import { DEMO_FILES, FALLBACK_ART, MOCK_ART } from "@/lib/mock-data"
@@ -48,40 +49,12 @@ function art(file: string): React.CSSProperties {
 
 const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files")
 
-/**
- * Makes a slot accept image files dropped straight onto it, without going
- * through the agent. The drop stops there so the page-level handler never sees it.
- */
-function useImageDrop(onImages: (files: File[]) => void) {
-  const [over, setOver] = React.useState(false)
-  return {
-    over,
-    handlers: {
-      onDragEnter: (e: React.DragEvent) => {
-        if (hasFiles(e)) setOver(true)
-      },
-      onDragOver: (e: React.DragEvent) => {
-        if (!hasFiles(e)) return
-        e.preventDefault()
-        e.stopPropagation()
-      },
-      onDragLeave: (e: React.DragEvent) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-          setOver(false)
-        }
-      },
-      onDrop: (e: React.DragEvent) => {
-        if (!hasFiles(e)) return
-        e.preventDefault()
-        e.stopPropagation()
-        setOver(false)
-        const images = Array.from(e.dataTransfer.files).filter(isImageFile)
-        if (images.length) onImages(images)
-        else toast("Drop an image here, or drop everything on the page")
-      },
-    },
-  }
-}
+const useImageDrop = (onImages: (files: File[]) => void) =>
+  useFileDrop({
+    accept: isImageFile,
+    onFiles: onImages,
+    hint: "Drop an image here, or drop everything on the page",
+  })
 
 /** A hidden file input opened from a click on a slot. */
 function useImagePicker(onImages: (files: File[]) => void) {
