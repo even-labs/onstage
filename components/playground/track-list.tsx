@@ -2,11 +2,14 @@
 
 import * as React from "react"
 import { useAuiState } from "@assistant-ui/react"
-import { GripVerticalIcon, LockIcon } from "lucide-react"
+import { GripVerticalIcon, LockIcon, PauseIcon, PlayIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
+import { assetUrl } from "@/lib/assets"
 import { trackField } from "@/lib/release"
 import { cn } from "@/lib/utils"
 
@@ -18,6 +21,32 @@ export function TrackList() {
   const editing = mode === "edit"
   const [dragFrom, setDragFrom] = React.useState<number | null>(null)
   const [dropAt, setDropAt] = React.useState<number | null>(null)
+
+  // One player for the list: the file playing now, if any. Only real dropped
+  // files have audio; the demo names have none.
+  const [playing, setPlaying] = React.useState<string | null>(null)
+  const audioRef = React.useRef<HTMLAudioElement | null>(null)
+  React.useEffect(() => () => audioRef.current?.pause(), [])
+
+  function togglePlay(file: string) {
+    const url = assetUrl(file)
+    if (!url) {
+      toast("Drop the audio file on the list to play it")
+      return
+    }
+    const audio = (audioRef.current ??= new Audio())
+    if (playing === file) {
+      audio.pause()
+      setPlaying(null)
+      return
+    }
+    audio.src = url
+    audio.onended = () => setPlaying(null)
+    audio
+      .play()
+      .then(() => setPlaying(file))
+      .catch(() => toast.error("Could not play this file"))
+  }
 
   if (!release.tracks.length) {
     return editing ? (
@@ -106,20 +135,41 @@ export function TrackList() {
             </div>
 
             {editing ? (
-              <Badge
-                variant={track.bonus ? "outline" : "ghost"}
-                render={<button type="button" />}
-                onClick={() =>
-                  dispatch({ type: "toggleBonus", file: track.file })
-                }
-                className={cn(
-                  "rounded-sm text-muted-foreground",
-                  !track.bonus &&
-                    "opacity-0 group-hover/track:opacity-100 focus-visible:opacity-100"
-                )}
-              >
-                {track.bonus ? "Bonus Track" : "+ Bonus"}
-              </Badge>
+              <div className="flex items-center gap-1">
+                <Badge
+                  variant={track.bonus ? "outline" : "ghost"}
+                  render={<button type="button" />}
+                  onClick={() =>
+                    dispatch({ type: "toggleBonus", file: track.file })
+                  }
+                  className={cn(
+                    "rounded-sm text-muted-foreground",
+                    !track.bonus &&
+                      "opacity-0 group-hover/track:opacity-100 focus-visible:opacity-100"
+                  )}
+                >
+                  {track.bonus ? "Bonus Track" : "+ Bonus"}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${playing === track.file ? "Pause" : "Play"} ${track.title}`}
+                  aria-pressed={playing === track.file}
+                  title={
+                    assetUrl(track.file)
+                      ? undefined
+                      : "Drop the audio file on the list to play it"
+                  }
+                  onClick={() => togglePlay(track.file)}
+                  className={cn(
+                    "text-muted-foreground",
+                    !assetUrl(track.file) && "opacity-40",
+                    playing === track.file && "text-foreground"
+                  )}
+                >
+                  {playing === track.file ? <PauseIcon /> : <PlayIcon />}
+                </Button>
+              </div>
             ) : (
               <Badge
                 variant="outline"
