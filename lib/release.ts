@@ -246,16 +246,23 @@ export function isEmpty(release: Release) {
   return !release.title && !release.cover && release.tracks.length === 0
 }
 
+/** Fields Publish needs; each one is a place in the editor the artist can jump to. */
+export type RequiredField =
+  "cover" | "title" | "artist" | "release_date" | "tracks" | "tiers"
+
 /** What a release needs before it can be published, in page order. */
 export function missingBeforePublish(release: Release) {
-  return [
-    !release.cover && "cover",
-    !release.title.trim() && "title",
-    !release.artist.trim() && "artist name",
-    !release.releaseDate && "release date",
-    !release.tracks.length && "at least one track",
-    !release.tiers.length && "a price",
-  ].filter((item): item is string => Boolean(item))
+  const checks: [boolean, RequiredField, string][] = [
+    [!release.cover, "cover", "cover"],
+    [!release.title.trim(), "title", "title"],
+    [!release.artist.trim(), "artist", "artist name"],
+    [!release.releaseDate, "release_date", "release date"],
+    [!release.tracks.length, "tracks", "at least one track"],
+    [!release.tiers.length, "tiers", "a price"],
+  ]
+  return checks
+    .filter(([isMissing]) => isMissing)
+    .map(([, field, label]) => ({ field, label }))
 }
 
 export function canPublish(release: Release) {

@@ -200,6 +200,7 @@ function AddTracks() {
       <Button
         variant="outline"
         size="sm"
+        data-field="tracks"
         onClick={() => input.current?.click()}
       >
         <PlusIcon />

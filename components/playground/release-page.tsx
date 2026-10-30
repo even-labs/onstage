@@ -20,7 +20,10 @@ import { useSidebar } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAgent } from "@/components/playground/agent-runtime"
 import { EditableText } from "@/components/playground/editable-text"
-import { usePlayground } from "@/components/playground/playground-provider"
+import {
+  usePlayground,
+  type PageTab,
+} from "@/components/playground/playground-provider"
 import { Slot, TrackList } from "@/components/playground/track-list"
 import { useRemoveWithUndo } from "@/components/playground/use-remove-with-undo"
 import { assetUrl, isImageFile, registerAssets } from "@/lib/assets"
@@ -110,7 +113,7 @@ function useImagePicker(onImages: (files: File[]) => void) {
 
 /** The release page in Edit mode: every slot is editable in place. */
 export function ReleasePage() {
-  const { release, mode } = usePlayground()
+  const { release, mode, pageTab, setPageTab } = usePlayground()
   const { stageFiles, staged } = useAgent()
   const running = useAuiState((s) => s.thread.isRunning)
   const editing = mode === "edit"
@@ -161,7 +164,11 @@ export function ReleasePage() {
 
       <div className="relative grid gap-6">
         <Hero />
-        <Tabs defaultValue="tracks" className="gap-3">
+        <Tabs
+          value={pageTab}
+          onValueChange={(value) => setPageTab(value as PageTab)}
+          className="gap-3"
+        >
           <TabsList
             variant="line"
             className="h-auto w-full justify-start gap-5 rounded-none border-b p-0"
@@ -221,6 +228,7 @@ function Hero() {
         <EditableText
           value={release.title}
           placeholder="Release title"
+          field="title"
           editable={editing}
           pending={running}
           onCommit={(value) =>
@@ -234,6 +242,7 @@ function Hero() {
           <EditableText
             value={release.artist}
             placeholder="Artist name"
+            field="artist"
             editable={editing}
             pending={running}
             onCommit={(value) =>
@@ -249,6 +258,7 @@ function Hero() {
             <input
               type="date"
               aria-label="Release date"
+              data-field="release_date"
               value={release.releaseDate}
               onChange={(e) =>
                 dispatch({ type: "setReleaseDate", value: e.target.value })
@@ -324,6 +334,7 @@ function CoverArt() {
           role="button"
           tabIndex={0}
           aria-label="Add cover art"
+          data-field="cover"
           onClick={picker.open}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") picker.open()
@@ -548,6 +559,7 @@ function AccessEditor() {
           variant="outline"
           size="sm"
           className="justify-self-start"
+          data-field="tiers"
           onClick={() => dispatch({ type: "addTier" })}
         >
           <PlusIcon />

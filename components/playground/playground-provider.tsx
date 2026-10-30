@@ -11,6 +11,7 @@ import { releaseReducer, type ReleaseAction } from "@/lib/release-reducer"
  */
 export type Mode = "edit" | "fan" | "publish"
 export type Viewport = "desktop" | "phone"
+export type PageTab = "tracks" | "access"
 
 type PlaygroundContextValue = {
   release: Release
@@ -22,6 +23,9 @@ type PlaygroundContextValue = {
   /** How much the phone frame is scaled down to fit, in percent. */
   zoom: number
   setZoom: (zoom: number) => void
+  /** The editor's Tracks / Access tab, so other panels can switch it. */
+  pageTab: PageTab
+  setPageTab: (tab: PageTab) => void
   /** Whether the draft review column beside the preview is open. */
   reviewOpen: boolean
   setReviewOpen: (open: boolean) => void
@@ -48,6 +52,7 @@ export function PlaygroundProvider({
   const [mode, setMode] = React.useState<Mode>("edit")
   const [viewport, setViewport] = React.useState<Viewport>("desktop")
   const [zoom, setZoom] = React.useState(100)
+  const [pageTab, setPageTab] = React.useState<PageTab>("tracks")
   // Closed on the first screen; it opens when the AI has something to review.
   const [reviewOpen, setReviewOpen] = React.useState(false)
 
@@ -62,6 +67,8 @@ export function PlaygroundProvider({
         setViewport,
         zoom,
         setZoom,
+        pageTab,
+        setPageTab,
         reviewOpen,
         setReviewOpen,
       }}

@@ -8,6 +8,8 @@ type EditableTextProps = {
   placeholder: string
   editable: boolean
   multiline?: boolean
+  /** Marks the element so other panels can jump to it (see DraftReview). */
+  field?: string
   /** The agent is working: empty slots shimmer until it fills them. */
   pending?: boolean
   className?: string
@@ -23,6 +25,7 @@ export function EditableText({
   placeholder,
   editable,
   multiline,
+  field,
   pending,
   className,
 }: EditableTextProps) {
@@ -36,6 +39,7 @@ export function EditableText({
       // browser-owned DOM inside contentEditable never drifts from state.
       key={value}
       role="textbox"
+      data-field={field}
       aria-label={placeholder}
       aria-multiline={multiline}
       contentEditable="plaintext-only"

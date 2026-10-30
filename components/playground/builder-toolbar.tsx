@@ -148,7 +148,7 @@ export function BuilderToolbar() {
             <span
               title={
                 missing.length
-                  ? `Missing before publish: ${missing.join(", ")}`
+                  ? `Missing before publish: ${missing.map((m) => m.label).join(", ")}`
                   : undefined
               }
             >

@@ -6,8 +6,16 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { AiTag } from "@/components/playground/brand"
 import { EditableText } from "@/components/playground/editable-text"
-import { usePlayground } from "@/components/playground/playground-provider"
-import { missingBeforePublish, tierPrice, type Extra } from "@/lib/release"
+import {
+  usePlayground,
+  type PageTab,
+} from "@/components/playground/playground-provider"
+import {
+  missingBeforePublish,
+  tierPrice,
+  type Extra,
+  type RequiredField,
+} from "@/lib/release"
 import { extraNameAvailable } from "@/lib/release-reducer"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +27,7 @@ import { cn } from "@/lib/utils"
 export function DraftReview({ className }: { className?: string }) {
   const { release } = usePlayground()
   const missing = missingBeforePublish(release)
+  const jumpTo = useJumpToField()
 
   return (
     <aside
@@ -26,17 +35,72 @@ export function DraftReview({ className }: { className?: string }) {
       className={cn("grid content-start gap-6 text-sm", className)}
     >
       {missing.length > 0 && (
-        <section className="grid gap-1">
+        <section className="grid gap-2">
           <h2 className="font-semibold">Missing before publish</h2>
-          <p className="text-muted-foreground first-letter:uppercase">
-            {missing.join(", ")}
-          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {missing.map(({ field, label }) => (
+              <li key={field}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title="Show me where"
+                  onClick={() => jumpTo(field)}
+                >
+                  {label.charAt(0).toUpperCase() + label.slice(1)}
+                </Button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       <Questions />
       <SuggestedExtras />
     </aside>
   )
+}
+
+/** Required fields that live on a tab other than the one above the tabs. */
+const TAB_FOR: Partial<Record<RequiredField, PageTab>> = {
+  tracks: "tracks",
+  tiers: "access",
+}
+
+/**
+ * Brings a required field into view in the editor: switches to Edit and to
+ * the right tab, scrolls to the field, focuses it and flashes it.
+ */
+function useJumpToField() {
+  const { mode, setMode, setPageTab } = usePlayground()
+
+  return (field: RequiredField) => {
+    if (mode !== "edit") setMode("edit")
+    const tab = TAB_FOR[field]
+    if (tab) setPageTab(tab)
+    // Let the editor (and the tab) render before looking for the field.
+    setTimeout(() => {
+      const target = document.querySelector<HTMLElement>(
+        `[data-field="${field}"]`
+      )
+      if (!target) return
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches
+      target.scrollIntoView({
+        block: "center",
+        behavior: reduceMotion ? "auto" : "smooth",
+      })
+      target.focus({ preventScroll: true })
+      if (!reduceMotion) {
+        target.animate(
+          [
+            { boxShadow: "0 0 0 4px rgb(250 250 250 / 0.9)" },
+            { boxShadow: "0 0 0 4px rgb(250 250 250 / 0)" },
+          ],
+          { duration: 1400, easing: "ease-out" }
+        )
+      }
+    }, 60)
+  }
 }
 
 function Questions() {
