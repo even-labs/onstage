@@ -67,10 +67,14 @@ Page slots:
 | Extras and tiers | Add, edit, delete | Proposes 2–3 extras that fit the record; drafts tiers with prices |
 | Price and buy button | Type the price | Base tier price = minimum price |
 
-Stack: not decided yet. Check package.json / the repo before assuming one, and ask if it's
-still empty. Also undecided: whether the AI call runs from a claude.ai artifact (no API key)
-or a local app with a server route and an API key. Never put an API key in client code or
-commit it; use an env var and keep .env out of git.
+Stack: Next.js 16 (App Router) + shadcn/ui (`base-nova` preset, Base UI primitives, so
+components take `render` instead of `asChild`) + Tailwind v4, managed with pnpm. Next 16 has
+breaking changes: read @AGENTS.md before writing Next code. The playground lives in
+`components/playground/` (agent chat in the sidebar, release page on the right) and runs on
+mock data from `lib/mock-data.ts`; `lib/mock-agent.ts` stands in for the Claude call.
+Still undecided: whether the real AI call runs from a claude.ai artifact (no API key) or a
+server route with an API key. Never put an API key in client code or commit it; use an env
+var and keep .env out of git.
 
 ## AI first-pass contract
 
