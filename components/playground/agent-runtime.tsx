@@ -7,12 +7,14 @@ import {
   AuiConfig,
   Tools,
   useAssistantContext,
+  type AttachmentAdapter,
   type Toolkit,
 } from "@assistant-ui/react"
 import { lastAssistantMessageIsCompleteWithToolCalls } from "ai"
 import { z } from "zod"
 
 import { usePlayground } from "@/components/playground/playground-provider"
+import { registerAsset } from "@/lib/assets"
 import {
   DEMO_FILES,
   DEMO_RELEASE_DATE,
@@ -38,6 +40,15 @@ const UPDATE_RELEASE_TOOL = {
       result?.ok ? "Updated the page" : "Couldn't update the page",
   },
 } as const
+
+/** Adds files to the ones the agent already knows about; a newer file with the same name wins. */
+function mergeFiles(current: DroppedFile[], added: DroppedFile[]) {
+  const names = new Set(added.map((f) => f.name))
+  return [...current.filter((f) => !names.has(f.name)), ...added]
+}
+
+const describeFile = (f: DroppedFile) =>
+  `${f.name} (${[f.kind, f.duration].filter(Boolean).join(", ")})`
 
 type AgentContextValue = {
   /** Hand dropped files to the agent and ask for a first pass. */
@@ -74,15 +85,53 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
     releaseRef.current = release
   }, [release])
 
-  const changeFiles = React.useCallback((next: DroppedFile[]) => {
-    filesRef.current = next
-    setFiles(next)
-  }, [])
+  const changeFiles = React.useCallback(
+    (update: (current: DroppedFile[]) => DroppedFile[]) => {
+      const next = update(filesRef.current)
+      filesRef.current = next
+      setFiles(next)
+    },
+    []
+  )
+
+  // Files attached in the chat are handled like files dropped on the page:
+  // registered locally for the page to show, with only their names, types and
+  // durations sent to Claude. Uploading them would hit Vercel's 4.5 MB request
+  // limit, and Claude can't read audio anyway.
+  const attachments = React.useMemo<AttachmentAdapter>(
+    () => ({
+      accept: "*",
+      async add({ file }) {
+        return {
+          id: crypto.randomUUID(),
+          type: file.type.startsWith("image/") ? "image" : "file",
+          name: file.name,
+          contentType: file.type,
+          file,
+          status: { type: "requires-action", reason: "composer-send" },
+        }
+      },
+      async send(attachment) {
+        const dropped = await registerAsset(attachment.file)
+        changeFiles((current) => mergeFiles(current, [dropped]))
+        return {
+          ...attachment,
+          status: { type: "complete" },
+          content: [
+            { type: "text", text: `Attached file: ${describeFile(dropped)}` },
+          ],
+        }
+      },
+      async remove() {},
+    }),
+    [changeFiles]
+  )
 
   const runtime = useChatRuntime({
     // Send the tool result back so Claude can say what it changed.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     suggestions: SUGGESTED_PROMPTS,
+    adapters: { attachments },
   })
 
   const toolkit = React.useMemo<Toolkit>(
@@ -107,12 +156,12 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
 
   const agent = React.useMemo<AgentContextValue>(
     () => ({
-      sendFiles(next) {
-        changeFiles(next)
+      sendFiles(added) {
+        changeFiles((current) => mergeFiles(current, added))
         runtime.thread.append(DROP_PROMPT)
       },
       loadSavedDraft() {
-        changeFiles(DEMO_FILES)
+        changeFiles(() => DEMO_FILES)
         dispatch({
           type: "applyDraft",
           draft: LUMA_VALE_DRAFT,
@@ -121,7 +170,7 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
         dispatch({ type: "setReleaseDate", value: DEMO_RELEASE_DATE })
       },
       startOver() {
-        changeFiles([])
+        changeFiles(() => [])
         dispatch({ type: "reset" })
         runtime.thread.reset()
       },
@@ -160,12 +209,7 @@ function PageContext({
 
 function describePage(release: Release, files: DroppedFile[]) {
   const fileList = files.length
-    ? files
-        .map(
-          (f) =>
-            `- ${f.name} (${[f.kind, f.duration].filter(Boolean).join(", ")})`
-        )
-        .join("\n")
+    ? files.map((f) => `- ${describeFile(f)}`).join("\n")
     : "None yet."
   const notes = files
     .filter((f) => f.content)
