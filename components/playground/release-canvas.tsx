@@ -24,9 +24,12 @@ export function ReleaseCanvas() {
           <PhoneFrame>{page}</PhoneFrame>
         ) : (
           // Two fixed layouts, no animated width: text never reflows mid-switch.
+          // shrink-0 keeps the page at its full height so the column scrolls;
+          // overflow-clip (not hidden) rounds the corners without becoming a
+          // scroll container, so the fan page's sticky header and bar still pin.
           <div
             className={cn(
-              "@container w-full max-w-[1000px] overflow-hidden rounded-xl border",
+              "@container w-full max-w-[1000px] shrink-0 overflow-clip rounded-xl border",
               mode === "edit" ? "bg-background" : "bg-fan-bg"
             )}
           >
