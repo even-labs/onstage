@@ -16,11 +16,20 @@ export function ReleaseCanvas() {
   const { viewport, mode, release, reviewOpen } = usePlayground()
   const page = mode === "edit" ? <ReleasePage /> : <FanPage />
   const showReview = reviewOpen && mode !== "publish" && !isEmpty(release)
+  const phone = viewport === "phone"
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-card/30 lg:flex-row lg:overflow-hidden">
-      <div className="flex min-w-0 flex-1 flex-col items-center p-4 md:p-6 lg:min-h-0 lg:overflow-y-auto">
-        {viewport === "phone" ? (
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col items-center lg:min-h-0 lg:overflow-y-auto",
+          // Sticky elements pin inside the scroller's padding, so on desktop
+          // the gap above and below the page is a margin on the frame instead:
+          // the fan page's header and purchase bar then pin flush to the edges.
+          phone ? "p-4 md:p-6" : "px-4 md:px-6"
+        )}
+      >
+        {phone ? (
           <PhoneFrame>{page}</PhoneFrame>
         ) : (
           // Two fixed layouts, no animated width: text never reflows mid-switch.
@@ -29,7 +38,7 @@ export function ReleaseCanvas() {
           // scroll container, so the fan page's sticky header and bar still pin.
           <div
             className={cn(
-              "@container w-full max-w-[1000px] shrink-0 overflow-clip rounded-xl border",
+              "@container my-4 w-full max-w-[1000px] shrink-0 overflow-clip rounded-xl border md:my-6",
               mode === "edit" ? "bg-background" : "bg-fan-bg"
             )}
           >
