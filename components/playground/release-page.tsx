@@ -279,27 +279,39 @@ function Hero() {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          {trackCount > 0 && <span>{releaseType(trackCount)} ·</span>}
           {editing ? (
-            <input
-              type="date"
-              aria-label="Release date"
-              value={release.releaseDate}
-              onChange={(e) =>
-                dispatch({ type: "setReleaseDate", value: e.target.value })
-              }
-              className={cn(
-                "rounded-sm bg-transparent [color-scheme:dark] outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-ai/60 focus:outline-ai",
-                !release.releaseDate &&
-                  "rounded-md border-[1.5px] border-dashed px-2 py-1"
+            <>
+              {trackCount > 0 && <span>{releaseType(trackCount)} ·</span>}
+              <input
+                type="date"
+                aria-label="Release date"
+                value={release.releaseDate}
+                onChange={(e) =>
+                  dispatch({ type: "setReleaseDate", value: e.target.value })
+                }
+                className={cn(
+                  "rounded-sm bg-transparent [color-scheme:dark] outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-ai/60 focus:outline-ai",
+                  !release.releaseDate &&
+                    "rounded-md border-[1.5px] border-dashed px-2 py-1"
+                )}
+              />
+              {trackCount > 0 && (
+                <span>
+                  · {trackCount} song{trackCount === 1 ? "" : "s"}
+                </span>
               )}
-            />
+            </>
           ) : (
-            <span>{formatDate(release.releaseDate)}</span>
-          )}
-          {trackCount > 0 && (
-            <span>
-              · {trackCount} song{trackCount === 1 ? "" : "s"}
+            // Fans see only what is set, so an empty date leaves no gap.
+            <span data-testid="release-meta">
+              {[
+                trackCount > 0 && releaseType(trackCount),
+                release.releaseDate && formatDate(release.releaseDate),
+                trackCount > 0 &&
+                  `${trackCount} song${trackCount === 1 ? "" : "s"}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           )}
         </div>

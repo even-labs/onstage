@@ -1,5 +1,5 @@
 import {
-  anthropic,
+  createAnthropic,
   type AnthropicLanguageModelOptions,
 } from "@ai-sdk/anthropic"
 import { frontendTools, type FrontendTools } from "@assistant-ui/ai-sdk"
@@ -15,6 +15,17 @@ export const maxDuration = 60
 
 /** Set ANTHROPIC_MODEL in .env.local to try another model. */
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5-5"
+
+/**
+ * An API key from the console when there is one; otherwise, for local runs,
+ * a Claude Code OAuth token (ANTHROPIC_AUTH_TOKEN) sent as a Bearer token,
+ * which bills the account's subscription instead of needing a key.
+ */
+const anthropic = createAnthropic(
+  !process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_AUTH_TOKEN
+    ? { authToken: process.env.ANTHROPIC_AUTH_TOKEN }
+    : {}
+)
 
 /** Models that accept server-side refusal fallbacks (`fallbacks: "default"`). */
 const SUPPORTS_FALLBACKS = new Set([
