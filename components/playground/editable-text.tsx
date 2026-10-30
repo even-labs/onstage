@@ -8,8 +8,6 @@ type EditableTextProps = {
   placeholder: string
   editable: boolean
   multiline?: boolean
-  /** Written by the AI and not yet touched by the artist. */
-  ai?: boolean
   /** The agent is working: empty slots shimmer until it fills them. */
   pending?: boolean
   className?: string
@@ -25,7 +23,6 @@ export function EditableText({
   placeholder,
   editable,
   multiline,
-  ai,
   pending,
   className,
 }: EditableTextProps) {
@@ -59,13 +56,14 @@ export function EditableText({
         if (next !== value) onCommit(next)
       }}
       className={cn(
-        "cursor-text rounded-sm outline-1 outline-offset-4 outline-transparent transition-[outline-color] outline-dashed hover:outline-ai/60 focus:outline-ai",
+        // Editability shows on hover only, in a neutral color; focus gets a
+        // solid ring that reads differently from hover. Violet is kept for
+        // things the AI did.
+        "cursor-text rounded-sm outline-1 outline-offset-4 outline-transparent transition-[outline-color] outline-dashed hover:outline-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-200 focus-visible:outline-solid",
         "empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]",
-        ai &&
-          "underline decoration-ai/50 decoration-dotted underline-offset-[5px]",
         className,
         !value &&
-          "rounded-md border-[1.5px] border-dashed px-3 py-2 text-sm leading-normal font-normal tracking-normal outline-none focus:border-ai",
+          "rounded-md border-[1.5px] border-dashed px-3 py-2 text-sm leading-normal font-normal tracking-normal",
         pending && !value && "animate-pulse border-ai/60"
       )}
     >

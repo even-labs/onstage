@@ -1,11 +1,13 @@
 import {
   applyDraft,
   emptyRelease,
+  resolveQuestionsFor,
   trackField,
   type AiDraft,
   type DroppedFile,
   type Extra,
   type ExtraStatus,
+  type QuestionField,
   type Release,
 } from "@/lib/release"
 
@@ -28,14 +30,46 @@ export type ReleaseAction =
       patch: Partial<Pick<Extra, "name" | "description">>
     }
   | { type: "setTierPrice"; name: string; price: number }
-  | { type: "resolveQuestion"; index: number }
+  | { type: "toggleQuestion"; index: number }
 
 /** The artist touched this field, so it no longer counts as AI-written. */
 function unmarkAi(aiFields: string[], field: string) {
   return aiFields.filter((f) => f !== field)
 }
 
+/** The page field an artist's action fills in, for resolving draft questions. */
+function answeredField(action: ReleaseAction): QuestionField | null {
+  switch (action.type) {
+    case "edit":
+      return action.value.trim() ? action.field : null
+    case "setReleaseDate":
+      return action.value ? "release_date" : null
+    case "setCover":
+      return "cover"
+    case "addPhotos":
+      return "photos"
+    case "renameTrack":
+    case "moveTrack":
+    case "toggleBonus":
+      return "tracks"
+    case "setExtraStatus":
+    case "editExtra":
+      return "extras"
+    case "setTierPrice":
+      return "tiers"
+    default:
+      return null
+  }
+}
+
 export function releaseReducer(state: Release, action: ReleaseAction): Release {
+  const next = applyAction(state, action)
+  const field = answeredField(action)
+  if (!field) return next
+  return { ...next, questions: resolveQuestionsFor(next.questions, field) }
+}
+
+function applyAction(state: Release, action: ReleaseAction): Release {
   switch (action.type) {
     case "applyDraft":
       return applyDraft(state, action.draft, action.files)
@@ -124,10 +158,12 @@ export function releaseReducer(state: Release, action: ReleaseAction): Release {
         ),
       }
 
-    case "resolveQuestion":
+    case "toggleQuestion":
       return {
         ...state,
-        questions: state.questions.filter((_, i) => i !== action.index),
+        questions: state.questions.map((q, i) =>
+          i === action.index ? { ...q, resolved: !q.resolved } : q
+        ),
       }
   }
 }

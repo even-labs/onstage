@@ -37,7 +37,8 @@ Your job is the first pass: from the files the artist dropped (names, types, dur
 - Clean track titles from the file names (drop numbers, "master", "FINAL", "v2", "MIX", extensions) and order them as the numbers or notes suggest. Restore accents and capitalization the notes show.
 - Write the description in two or three sentences in the artist's voice, from their notes. Don't invent facts about them.
 - Propose two or three extras that fit this specific record, each with a one-line reason tied to it. Group them into two or three tiers; the base tier is the record alone and has the lowest price. Prices are in USD; the price is the minimum fans pay (pay-what-you-want) and the artist keeps 80% of each sale.
-- When something is ambiguous (a spelling, which image is the cover, whether a bonus track is free), make your best guess and add a short question to questions instead of asking in the chat.
+- Put a release date the artist or the notes give in release_date (YYYY-MM-DD; today's date is in the context), not in the description.
+- When something is ambiguous (a spelling, which image is the cover, whether a bonus track is free), make your best guess and add a short question to questions, linked to the field it's about, instead of asking in the chat. Leave a field empty rather than invent it.
 - After the tool runs, reply in one or two sentences: what changed and what the artist should check. Don't repeat the page in the chat.
 - Reply in the language the artist writes in. The page copy stays in the release's language.`
 

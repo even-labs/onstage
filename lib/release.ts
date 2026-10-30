@@ -12,6 +12,27 @@ export type DroppedFile = {
   content?: string
 }
 
+/** Page fields a draft question can point at. */
+export const QUESTION_FIELDS = [
+  "title",
+  "artist",
+  "description",
+  "release_date",
+  "cover",
+  "photos",
+  "tracks",
+  "extras",
+  "tiers",
+] as const
+
+export type QuestionField = (typeof QUESTION_FIELDS)[number]
+
+export type Question = {
+  text: string
+  field?: QuestionField
+  resolved: boolean
+}
+
 /** What the Claude first pass returns. Mirrors the contract in CLAUDE.md. */
 export const aiDraftSchema = z.object({
   title: z.string().describe("Release title"),
@@ -56,10 +77,28 @@ export const aiDraftSchema = z.object({
     .describe(
       "Two or three tiers; the base tier is the record alone, cheapest"
     ),
-  // Not in the CLAUDE.md contract yet: doubts the artist resolves in place.
+  // Not in the CLAUDE.md contract yet: the date the release comes out, and
+  // doubts the artist resolves in place.
+  release_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .describe(
+      "Release date as YYYY-MM-DD, when the artist or the files give one"
+    )
+    .optional(),
   questions: z
-    .array(z.string())
-    .describe("Short doubts for the artist to resolve on the page")
+    .array(
+      z.object({
+        text: z.string().describe("A short question for the artist"),
+        field: z
+          .enum(QUESTION_FIELDS)
+          .describe(
+            "The page field it's about; filling that field resolves the question"
+          )
+          .optional(),
+      })
+    )
+    .describe("Doubts for the artist to resolve on the page")
     .optional(),
 })
 
@@ -93,7 +132,7 @@ export type Release = {
   tracks: Track[]
   extras: Extra[]
   tiers: Tier[]
-  questions: string[]
+  questions: Question[]
   /** Fields the AI wrote that the artist hasn't touched yet. */
   aiFields: string[]
 }
@@ -170,7 +209,10 @@ export function applyDraft(
     }))
   }
   if (draft.tiers) next.tiers = draft.tiers
-  if (draft.questions) next.questions = draft.questions
+  if (draft.release_date) next.releaseDate = draft.release_date
+  if (draft.questions) {
+    next.questions = draft.questions.map((q) => ({ ...q, resolved: false }))
+  }
 
   next.aiFields = [...aiFields]
   return next
@@ -182,8 +224,30 @@ export function isEmpty(release: Release) {
   return !release.title && !release.cover && release.tracks.length === 0
 }
 
+/** What a release needs before it can be published, in page order. */
+export function missingBeforePublish(release: Release) {
+  return [
+    !release.cover && "cover",
+    !release.title.trim() && "title",
+    !release.artist.trim() && "artist name",
+    !release.releaseDate && "release date",
+    !release.tracks.length && "at least one track",
+    !release.tiers.length && "a price",
+  ].filter((item): item is string => Boolean(item))
+}
+
 export function canPublish(release: Release) {
-  return Boolean(release.cover && release.title.trim() && release.tracks.length)
+  return missingBeforePublish(release).length === 0
+}
+
+/** Marks the questions about `field` as resolved once the artist fills it in. */
+export function resolveQuestionsFor(
+  questions: Question[],
+  field: QuestionField
+) {
+  return questions.some((q) => q.field === field && !q.resolved)
+    ? questions.map((q) => (q.field === field ? { ...q, resolved: true } : q))
+    : questions
 }
 
 export function releaseType(trackCount: number) {

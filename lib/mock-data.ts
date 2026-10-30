@@ -22,7 +22,7 @@ export const DEMO_FILES: DroppedFile[] = [
     name: "notes.txt",
     kind: "text",
     content: [
-      "night bus home - EP, out nov 20",
+      "luma vale - night bus home, EP, out nov 20 2026",
       "wrote all of these on the N12 after shows, between the last stop and my door.",
       "ultima parada is the spanish one, it was always meant to have the accent.",
       "the voice memo is the first take of night bus home, 2am, phone on the window.",
@@ -92,9 +92,16 @@ export const LUMA_VALE_DRAFT: AiDraft = {
       ],
     },
   ],
+  release_date: DEMO_RELEASE_DATE,
   questions: [
-    "Is “Última Parada” spelled with an accent on the release? The file name has none.",
-    "Should the voice memo be free for everyone, or only inside the lyric notebook extra?",
+    {
+      text: "Is “Última Parada” spelled with an accent on the release? The file name has none.",
+      field: "tracks",
+    },
+    {
+      text: "Should the voice memo be free for everyone, or only inside the lyric notebook extra?",
+      field: "extras",
+    },
   ],
 }
 

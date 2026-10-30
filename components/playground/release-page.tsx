@@ -2,21 +2,12 @@
 
 import * as React from "react"
 import { useAuiState } from "@assistant-ui/react"
-import {
-  CheckIcon,
-  LibraryIcon,
-  LockIcon,
-  MessageCircleIcon,
-  SearchIcon,
-  Undo2Icon,
-  UploadIcon,
-} from "lucide-react"
+import { CheckIcon, LockIcon, UploadIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AiTag, Wordmark } from "@/components/playground/brand"
 import { useAgent } from "@/components/playground/agent-runtime"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
@@ -30,12 +21,11 @@ import {
   minPrice,
   releaseType,
   tierPrice,
-  type Extra,
 } from "@/lib/release"
 import { cn } from "@/lib/utils"
 
 /** A real dropped image when there is one, otherwise the mock gradient for that name. */
-function art(file: string): React.CSSProperties {
+export function art(file: string): React.CSSProperties {
   const url = assetUrl(file)
   if (url) {
     return {
@@ -104,51 +94,8 @@ function useImagePicker(onImages: (files: File[]) => void) {
   return { input, open: () => ref.current?.click() }
 }
 
-/** The frame around the page: desktop width or a ~390 px phone. */
-export function ReleaseCanvas() {
-  const { viewport, mode } = usePlayground()
-  const phone = viewport === "phone"
-
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-card/30 px-4 py-6 md:px-8 md:py-10">
-      <div
-        className={cn(
-          "@container mx-auto overflow-hidden border bg-background transition-[max-width] duration-300",
-          phone
-            ? "max-w-[390px] rounded-[2rem] border-[6px] border-zinc-800"
-            : "max-w-[1000px] rounded-xl"
-        )}
-      >
-        {mode === "publish" && <FanNav />}
-        <ReleasePage />
-      </div>
-    </div>
-  )
-}
-
-function FanNav() {
-  return (
-    <nav className="flex items-center gap-3 border-b px-4 py-2.5">
-      <Wordmark />
-      <div className="hidden max-w-[300px] flex-1 items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground @xl:flex">
-        <SearchIcon className="size-3.5" />
-        Search for releases or artists
-      </div>
-      <div className="ml-auto flex gap-2">
-        <Button variant="outline" size="sm" aria-label="My Library">
-          <LibraryIcon />
-          <span className="hidden @xl:inline">My Library</span>
-        </Button>
-        <Button variant="outline" size="sm" aria-label="Chat">
-          <MessageCircleIcon />
-          <span className="hidden @xl:inline">Chat</span>
-        </Button>
-      </div>
-    </nav>
-  )
-}
-
-function ReleasePage() {
+/** The release page in Edit mode: every slot is editable in place. */
+export function ReleasePage() {
   const { release, mode } = usePlayground()
   const { sendFiles } = useAgent()
   const running = useAuiState((s) => s.thread.isRunning)
@@ -187,15 +134,13 @@ function ReleasePage() {
       {release.cover && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-35 blur-[40px]"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[360px] [mask-image:linear-gradient(to_bottom,black,transparent)] opacity-35 blur-[40px]"
           style={art(release.cover)}
         />
       )}
 
       <div className="relative grid gap-6">
         <Hero />
-        {editing && <SuggestedExtras />}
-        {editing && <Questions />}
         <Tabs defaultValue="tracks" className="gap-3">
           <TabsList
             variant="line"
@@ -255,7 +200,6 @@ function Hero() {
           value={release.title}
           placeholder="Release title"
           editable={editing}
-          ai={release.aiFields.includes("title")}
           pending={running}
           onCommit={(value) =>
             dispatch({ type: "edit", field: "title", value })
@@ -269,7 +213,6 @@ function Hero() {
             value={release.artist}
             placeholder="Artist name"
             editable={editing}
-            ai={release.aiFields.includes("artist")}
             pending={running}
             onCommit={(value) =>
               dispatch({ type: "edit", field: "artist", value })
@@ -289,7 +232,7 @@ function Hero() {
                 dispatch({ type: "setReleaseDate", value: e.target.value })
               }
               className={cn(
-                "rounded-sm bg-transparent [color-scheme:dark] outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-ai/60 focus:outline-ai",
+                "h-7 rounded-sm bg-transparent [color-scheme:dark] outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-200 focus-visible:outline-solid",
                 !release.releaseDate &&
                   "rounded-md border-[1.5px] border-dashed px-2 py-1"
               )}
@@ -309,7 +252,6 @@ function Hero() {
           placeholder="Describe the release in two lines"
           editable={editing}
           multiline
-          ai={release.aiFields.includes("description")}
           pending={running}
           onCommit={(value) =>
             dispatch({ type: "edit", field: "description", value })
@@ -365,7 +307,7 @@ function CoverArt() {
           }}
           className={cn(
             "grid aspect-square w-full max-w-[240px] cursor-pointer place-items-center @xl:max-w-none",
-            drop.over && "border-ai bg-ai-muted/30"
+            drop.over && "border-zinc-300 bg-muted/40"
           )}
           {...dropProps}
         >
@@ -393,8 +335,8 @@ function CoverArt() {
         className={cn(
           "grid aspect-square w-full max-w-[240px] content-end justify-items-start rounded-md p-3 text-[13px] font-extrabold tracking-[0.08em] text-[#ffd9a8] uppercase shadow-lg @xl:max-w-none",
           editing &&
-            "cursor-pointer outline-2 outline-offset-4 outline-transparent transition-[outline-color] hover:outline-ai/60",
-          drop.over && "outline-ai"
+            "cursor-pointer outline-2 outline-offset-4 outline-transparent transition-[outline-color] hover:outline-zinc-500",
+          drop.over && "outline-zinc-300"
         )}
         onClick={editing ? picker.open : undefined}
         style={art(release.cover)}
@@ -432,7 +374,7 @@ function Photos() {
           }}
           className={cn(
             "w-fit cursor-pointer px-3 py-2 text-xs",
-            drop.over && "border-ai bg-ai-muted/30"
+            drop.over && "border-zinc-300 bg-muted/40"
           )}
           {...dropProps}
         >
@@ -447,7 +389,7 @@ function Photos() {
     <div
       className={cn(
         "flex flex-wrap gap-2 rounded-md",
-        drop.over && "outline-2 outline-offset-4 outline-ai"
+        drop.over && "outline-2 outline-offset-4 outline-zinc-300"
       )}
       {...dropProps}
     >
@@ -482,142 +424,7 @@ function Photos() {
   )
 }
 
-function SuggestedExtras() {
-  const { release } = usePlayground()
-  if (!release.extras.length) return null
-
-  return (
-    <section className="grid gap-2.5">
-      <h3 className="flex flex-wrap items-center gap-2 text-[13px] font-semibold">
-        <AiTag>Suggested extras</AiTag>
-        <span className="font-normal text-muted-foreground">
-          Releases with extras sell about 4× more. Keep what fits.
-        </span>
-      </h3>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2.5">
-        {release.extras.map((extra) => (
-          <ExtraCard key={extra.id} extra={extra} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function ExtraCard({ extra }: { extra: Extra }) {
-  const { release, dispatch } = usePlayground()
-  const price = tierPrice(release.tiers, extra.tier)
-  const setStatus = (status: Extra["status"]) =>
-    dispatch({ type: "setExtraStatus", id: extra.id, status })
-
-  function remove() {
-    setStatus("removed")
-    toast(`Removed “${extra.name}”`, {
-      action: { label: "Undo", onClick: () => setStatus("suggested") },
-    })
-  }
-
-  return (
-    <div
-      className={cn(
-        "grid content-start gap-1.5 rounded-lg border p-3 text-[13px] transition-opacity",
-        extra.status === "suggested" && "border-ai bg-ai-muted/35",
-        extra.status === "kept" && "border-success bg-success-muted/40",
-        extra.status === "removed" &&
-          "border-dashed opacity-40 hover:opacity-80"
-      )}
-    >
-      <EditableText
-        value={extra.name}
-        placeholder="Extra name"
-        editable={extra.status !== "removed"}
-        onCommit={(name) =>
-          dispatch({ type: "editExtra", id: extra.id, patch: { name } })
-        }
-        className="text-sm font-bold"
-      />
-      <span className="font-semibold tabular-nums">
-        {price === null ? "No price" : `$${price}`} · {extra.tier} tier
-      </span>
-
-      {extra.status === "suggested" ? (
-        <>
-          <EditableText
-            value={extra.description}
-            placeholder="What fans get"
-            editable
-            multiline
-            onCommit={(description) =>
-              dispatch({
-                type: "editExtra",
-                id: extra.id,
-                patch: { description },
-              })
-            }
-          />
-          <span className="text-xs text-muted-foreground italic">
-            {extra.why_it_fits}
-          </span>
-          <div className="mt-1 flex gap-1.5">
-            <Button
-              size="xs"
-              className="bg-success-muted text-success hover:bg-success-muted/70"
-              onClick={() => setStatus("kept")}
-            >
-              <CheckIcon />
-              Keep
-            </Button>
-            <Button size="xs" variant="outline" onClick={remove}>
-              Remove
-            </Button>
-          </div>
-        </>
-      ) : (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {extra.status === "kept" ? "Kept · in the Access tab" : "Removed"}
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => setStatus("suggested")}
-          >
-            <Undo2Icon />
-            Undo
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-const COUNT_WORDS = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE"]
-
-function Questions() {
-  const { release, dispatch } = usePlayground()
-  const n = release.questions.length
-  if (!n) return null
-
-  return (
-    <section className="grid gap-1.5 rounded-r-md border-l-[3px] border-warning bg-warning-muted/35 px-3.5 py-2.5 text-[13px]">
-      <b className="text-xs tracking-[0.06em] text-warning">
-        {COUNT_WORDS[n] ?? n} QUESTION{n === 1 ? "" : "S"} FROM THE DRAFT
-      </b>
-      {release.questions.map((question, i) => (
-        <div key={question} className="flex items-start justify-between gap-3">
-          <span>{question}</span>
-          <Button
-            size="xs"
-            variant="ghost"
-            className="text-warning hover:text-warning"
-            onClick={() => dispatch({ type: "resolveQuestion", index: i })}
-          >
-            Resolved
-          </Button>
-        </div>
-      ))}
-    </section>
-  )
-}
-
-function AccessTiers() {
+export function AccessTiers() {
   const { release, mode, dispatch } = usePlayground()
   const editing = mode === "edit"
   const running = useAuiState((s) => s.thread.isRunning)
@@ -667,7 +474,7 @@ function AccessTiers() {
                       e.currentTarget.value = String(tier.price_usd)
                     }
                   }}
-                  className="w-12 [appearance:textfield] rounded-sm bg-transparent outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-ai/60 focus:outline-ai [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-12 [appearance:textfield] rounded-sm bg-transparent outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-200 focus-visible:outline-solid [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </label>
             ) : (
@@ -692,7 +499,7 @@ function AccessTiers() {
   )
 }
 
-function Includes() {
+export function Includes() {
   const { release, mode } = usePlayground()
   const running = useAuiState((s) => s.thread.isRunning)
 
@@ -733,6 +540,7 @@ function DropOverlay({
 }) {
   const { sendFiles, loadSavedDraft } = useAgent()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
+  const fileInput = React.useRef<HTMLInputElement>(null)
 
   function describeInstead() {
     if (isMobile) setOpenMobile(true)
@@ -746,47 +554,67 @@ function DropOverlay({
   }
 
   return (
-    <div className="absolute inset-0 z-10 grid place-items-center bg-background/75 p-4 backdrop-blur-[2px]">
-      <div className="grid max-w-[420px] justify-items-center gap-2 rounded-xl border-2 border-dashed border-ai px-6 py-7 text-center @xl:px-9">
-        <UploadIcon className="size-6 text-ai" />
+    <div className="absolute inset-0 z-10 grid place-items-center bg-background/50 p-4">
+      <div className="grid max-w-[420px] justify-items-center gap-3 rounded-xl border-2 border-dashed border-zinc-600 bg-background/95 px-6 py-7 text-center @xl:px-9">
+        <UploadIcon className="size-6 text-muted-foreground" />
         <b className="text-lg">Drop everything here</b>
-        <p className="text-[13px] text-muted-foreground">
-          Cover, photos, tracks, voice notes. Or describe the release and we lay
-          it out for you.
+        <p className="text-sm text-muted-foreground">
+          Cover, photos, tracks, voice notes. Claude lays out the page the way
+          fans will see it.
         </p>
         {!dragging && (
           <>
-            <div className="flex flex-wrap justify-center gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={describeInstead}>
+            <div className="flex flex-wrap justify-center gap-2 pt-1">
+              <Button onClick={() => fileInput.current?.click()}>
+                Choose files
+              </Button>
+              <Button variant="outline" onClick={describeInstead}>
                 Describe it instead
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => sendFiles(DEMO_FILES)}
-              >
-                Use demo files
-              </Button>
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                hidden
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files ?? [])
+                  e.target.value = ""
+                  if (files.length) sendFiles(await registerAssets(files))
+                }}
+              />
             </div>
-            <div className="flex flex-wrap justify-center">
-              <Button
-                variant="link"
-                size="xs"
-                className="text-muted-foreground"
-                onClick={onDismiss}
-              >
-                Fill it in by hand
-              </Button>
-              <Button
-                variant="link"
-                size="xs"
-                className="text-muted-foreground"
-                title="Fills the page with a saved first pass, without calling Claude"
-                onClick={loadSavedDraft}
-              >
-                Load the saved draft
-              </Button>
-            </div>
+            <details className="text-sm text-muted-foreground">
+              <summary className="cursor-pointer py-1">
+                More ways to start
+              </summary>
+              <div className="flex flex-wrap justify-center">
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => sendFiles(DEMO_FILES)}
+                >
+                  Use demo files
+                </Button>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground"
+                  title="Fills the page with a saved first pass, without calling Claude"
+                  onClick={loadSavedDraft}
+                >
+                  Load the saved draft
+                </Button>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={onDismiss}
+                >
+                  Fill it in by hand
+                </Button>
+              </div>
+            </details>
           </>
         )}
       </div>

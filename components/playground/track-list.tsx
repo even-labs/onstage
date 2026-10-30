@@ -7,7 +7,6 @@ import { GripVerticalIcon, LockIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
-import { trackField } from "@/lib/release"
 import { cn } from "@/lib/utils"
 
 const TRACK_DRAG_TYPE = "application/x-onstage-track"
@@ -32,7 +31,9 @@ export function TrackList() {
     setDropAt(null)
   }
 
-  const dropLine = <li aria-hidden className="mx-2 h-0.5 rounded-full bg-ai" />
+  const dropLine = (
+    <li aria-hidden className="mx-2 h-0.5 rounded-full bg-foreground/70" />
+  )
 
   return (
     <ol
@@ -57,7 +58,7 @@ export function TrackList() {
               setDropAt(e.clientY < rect.top + rect.height / 2 ? i : i + 1)
             }}
             className={cn(
-              "group/track grid grid-cols-[24px_1fr_auto] items-center gap-3 rounded-md px-2 py-2.5 text-sm hover:bg-card",
+              "group/track grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-md px-2 py-2.5 text-sm hover:bg-card",
               dragFrom === i && "opacity-40"
             )}
           >
@@ -74,7 +75,7 @@ export function TrackList() {
                   if (row) e.dataTransfer.setDragImage(row, 16, 20)
                 }}
                 onDragEnd={endDrag}
-                className="grid cursor-grab place-items-center text-muted-foreground active:cursor-grabbing"
+                className="grid size-7 cursor-grab place-items-center rounded-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-zinc-200 active:cursor-grabbing"
               >
                 <span className="text-xs tabular-nums group-hover/track:hidden">
                   {i + 1}
@@ -92,16 +93,17 @@ export function TrackList() {
                 value={track.title}
                 placeholder="Track title"
                 editable={editing}
-                ai={release.aiFields.includes(trackField(track.file))}
                 onCommit={(title) =>
                   dispatch({ type: "renameTrack", file: track.file, title })
                 }
                 className="truncate"
               />
-              <small className="truncate text-xs text-muted-foreground">
-                {editing
-                  ? [track.duration, track.file].filter(Boolean).join(" · ")
-                  : release.artist}
+              {/* Source file names stay out of the page; hover shows them. */}
+              <small
+                className="truncate text-xs text-muted-foreground"
+                title={editing ? track.file : undefined}
+              >
+                {editing ? track.duration : release.artist}
               </small>
             </div>
 
@@ -113,7 +115,7 @@ export function TrackList() {
                   dispatch({ type: "toggleBonus", file: track.file })
                 }
                 className={cn(
-                  "rounded-sm text-muted-foreground",
+                  "h-6 rounded-sm text-muted-foreground",
                   !track.bonus &&
                     "opacity-0 group-hover/track:opacity-100 focus-visible:opacity-100"
                 )}

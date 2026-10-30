@@ -5,7 +5,11 @@ import * as React from "react"
 import { emptyRelease, type Release } from "@/lib/release"
 import { releaseReducer, type ReleaseAction } from "@/lib/release-reducer"
 
-export type Mode = "edit" | "publish"
+/**
+ * edit: in-place editing. fan: the page exactly as fans see it, nothing
+ * editable. publish: the fan view after Publish.
+ */
+export type Mode = "edit" | "fan" | "publish"
 export type Viewport = "desktop" | "phone"
 
 type PlaygroundContextValue = {
@@ -15,6 +19,9 @@ type PlaygroundContextValue = {
   setMode: (mode: Mode) => void
   viewport: Viewport
   setViewport: (viewport: Viewport) => void
+  /** How much the phone frame is scaled down to fit, in percent. */
+  zoom: number
+  setZoom: (zoom: number) => void
 }
 
 const PlaygroundContext = React.createContext<PlaygroundContextValue | null>(
@@ -37,10 +44,20 @@ export function PlaygroundProvider({
   const [release, dispatch] = React.useReducer(releaseReducer, emptyRelease)
   const [mode, setMode] = React.useState<Mode>("edit")
   const [viewport, setViewport] = React.useState<Viewport>("desktop")
+  const [zoom, setZoom] = React.useState(100)
 
   return (
     <PlaygroundContext.Provider
-      value={{ release, dispatch, mode, setMode, viewport, setViewport }}
+      value={{
+        release,
+        dispatch,
+        mode,
+        setMode,
+        viewport,
+        setViewport,
+        zoom,
+        setZoom,
+      }}
     >
       {children}
     </PlaygroundContext.Provider>

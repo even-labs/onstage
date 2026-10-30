@@ -1,13 +1,12 @@
 "use client"
 
-import { PaperclipIcon, RotateCcwIcon } from "lucide-react"
+import { RotateCcwIcon } from "lucide-react"
 
 import { Thread } from "@/components/assistant-ui/elements/thread.aui"
 import { Button } from "@/components/ui/button"
 import { Sidebar, SidebarContent, SidebarHeader } from "@/components/ui/sidebar"
 import { useAgent } from "@/components/playground/agent-runtime"
 import { Wordmark } from "@/components/playground/brand"
-import { DEMO_FILES } from "@/lib/mock-data"
 
 export function AgentSidebar() {
   const { startOver } = useAgent()
@@ -37,8 +36,6 @@ export function AgentSidebar() {
 }
 
 function AgentWelcome() {
-  const { sendFiles } = useAgent()
-
   return (
     <div className="mb-4 grid gap-3 px-2 text-sm text-muted-foreground">
       <p>
@@ -46,15 +43,6 @@ function AgentWelcome() {
         the page the way fans will see it and suggest extras that fit the
         record.
       </p>
-      <Button
-        variant="outline"
-        size="sm"
-        className="justify-self-start"
-        onClick={() => sendFiles(DEMO_FILES)}
-      >
-        <PaperclipIcon />
-        Use the demo files
-      </Button>
     </div>
   )
 }

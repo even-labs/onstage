@@ -15,12 +15,7 @@ import { z } from "zod"
 
 import { usePlayground } from "@/components/playground/playground-provider"
 import { registerAsset } from "@/lib/assets"
-import {
-  DEMO_FILES,
-  DEMO_RELEASE_DATE,
-  LUMA_VALE_DRAFT,
-  SUGGESTED_PROMPTS,
-} from "@/lib/mock-data"
+import { DEMO_FILES, LUMA_VALE_DRAFT, SUGGESTED_PROMPTS } from "@/lib/mock-data"
 import { aiDraftSchema, type DroppedFile, type Release } from "@/lib/release"
 
 /** What the chat shows when the artist sends files without typing anything. */
@@ -167,7 +162,6 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
           draft: LUMA_VALE_DRAFT,
           files: DEMO_FILES,
         })
-        dispatch({ type: "setReleaseDate", value: DEMO_RELEASE_DATE })
       },
       startOver() {
         changeFiles(() => [])
@@ -236,6 +230,8 @@ function describePage(release: Release, files: DroppedFile[]) {
   }
 
   return [
+    // Without this the model guesses the year of a date like "out nov 20".
+    `Today is ${new Date().toISOString().slice(0, 10)}.`,
     "## Files the artist dropped",
     fileList,
     notes && `## Artist notes\n${notes}`,

@@ -3,7 +3,7 @@ import { AgentRuntime } from "@/components/playground/agent-runtime"
 import { AgentSidebar } from "@/components/playground/agent-sidebar"
 import { BuilderToolbar } from "@/components/playground/builder-toolbar"
 import { PlaygroundProvider } from "@/components/playground/playground-provider"
-import { ReleaseCanvas } from "@/components/playground/release-page"
+import { ReleaseCanvas } from "@/components/playground/release-canvas"
 
 /** Agent chat on the left, the release being built on the right. */
 export function Playground() {
@@ -15,6 +15,7 @@ export function Playground() {
         <AgentRuntime>
           <AgentSidebar />
           <SidebarInset className="h-svh overflow-hidden">
+            <h1 className="sr-only">Onstage release builder</h1>
             <BuilderToolbar />
             <ReleaseCanvas />
           </SidebarInset>

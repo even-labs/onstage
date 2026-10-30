@@ -1,9 +1,11 @@
 "use client"
 
 import {
+  EyeIcon,
   LoaderCircleIcon,
   MonitorIcon,
   PencilIcon,
+  SaveIcon,
   SmartphoneIcon,
 } from "lucide-react"
 import { useAuiState } from "@assistant-ui/react"
@@ -17,12 +19,14 @@ import {
   usePlayground,
   type Viewport,
 } from "@/components/playground/playground-provider"
-import { canPublish, slugify } from "@/lib/release"
+import { missingBeforePublish, slugify } from "@/lib/release"
 
 export function BuilderToolbar() {
-  const { release, mode, setMode, viewport, setViewport } = usePlayground()
+  const { release, mode, setMode, viewport, setViewport, zoom } =
+    usePlayground()
   const running = useAuiState((s) => s.thread.isRunning)
-  const publishable = canPublish(release)
+  const missing = missingBeforePublish(release)
+  const openQuestions = release.questions.filter((q) => !q.resolved).length
   const isDraft =
     release.aiFields.length > 0 ||
     release.extras.some((e) => e.status === "suggested")
@@ -30,6 +34,11 @@ export function BuilderToolbar() {
   function publish() {
     setMode("publish")
     toast.success(`Published · even.biz/r/${slugify(release.title)}`)
+    if (openQuestions) {
+      toast.warning(
+        `${openQuestions} question${openQuestions === 1 ? " is" : "s are"} still open from the draft`
+      )
+    }
   }
 
   return (
@@ -37,7 +46,7 @@ export function BuilderToolbar() {
       <SidebarTrigger />
       <Wordmark />
       <span className="hidden truncate text-sm text-muted-foreground sm:inline">
-        {mode === "publish" ? "Fan view" : "Backstage"} ·{" "}
+        {mode === "publish" ? "Published" : "Backstage"} ·{" "}
         {release.title || "New release"}
       </span>
       {running ? (
@@ -46,20 +55,45 @@ export function BuilderToolbar() {
           Claude is working
         </AiTag>
       ) : (
-        mode === "edit" &&
+        mode !== "publish" &&
         isDraft && (
           <AiTag className="hidden md:inline-flex">AI draft · review it</AiTag>
         )
       )}
 
       <div className="ml-auto flex items-center gap-2">
+        {mode !== "publish" && (
+          <ToggleGroup
+            variant="outline"
+            size="sm"
+            spacing={0}
+            value={[mode]}
+            onValueChange={(value) => {
+              if (value[0]) setMode(value[0] as "edit" | "fan")
+            }}
+          >
+            <ToggleGroupItem value="edit" aria-label="Edit">
+              <PencilIcon />
+              <span className="hidden lg:inline">Edit</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem value="fan" aria-label="Fan view">
+              <EyeIcon />
+              <span className="hidden lg:inline">Fan view</span>
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
+
         <ToggleGroup
           variant="outline"
           size="sm"
           spacing={0}
           value={[viewport]}
           onValueChange={(value) => {
-            if (value[0]) setViewport(value[0] as Viewport)
+            const next = value[0] as Viewport | undefined
+            if (!next) return
+            setViewport(next)
+            // Checking the phone layout is a fan-eye check, so start there.
+            if (next === "phone" && mode === "edit") setMode("fan")
           }}
         >
           <ToggleGroupItem value="desktop" aria-label="Desktop view">
@@ -71,8 +105,16 @@ export function BuilderToolbar() {
             <span className="hidden lg:inline">Phone</span>
           </ToggleGroupItem>
         </ToggleGroup>
+        {viewport === "phone" && (
+          <span
+            className="text-xs text-muted-foreground tabular-nums"
+            title="The phone preview is scaled to fit the window"
+          >
+            {zoom}%
+          </span>
+        )}
 
-        {mode === "edit" ? (
+        {mode !== "publish" ? (
           <>
             <Button
               variant="outline"
@@ -82,12 +124,23 @@ export function BuilderToolbar() {
             >
               Save draft
             </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              className="sm:hidden"
+              aria-label="Save draft"
+              onClick={() => toast("Draft saved")}
+            >
+              <SaveIcon />
+            </Button>
             <span
               title={
-                publishable ? undefined : "Needs a cover, a title and one track"
+                missing.length
+                  ? `Missing before publish: ${missing.join(", ")}`
+                  : undefined
               }
             >
-              <Button size="sm" disabled={!publishable} onClick={publish}>
+              <Button size="sm" disabled={missing.length > 0} onClick={publish}>
                 Publish
               </Button>
             </span>
