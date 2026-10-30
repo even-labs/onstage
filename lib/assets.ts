@@ -9,12 +9,20 @@ export const assetUrl = (name: string) => urls.get(name)
 
 export const isImageFile = (file: File) => file.type.startsWith("image/")
 export const isAudioFile = (file: File) => file.type.startsWith("audio/")
+const isPdfFile = (file: File) =>
+  file.type === "application/pdf" || /\.pdf$/i.test(file.name)
 
 /** Registers a dropped file and describes it the way the agent expects. */
 export function registerAsset(file: File): Promise<DroppedFile> {
   const dropped: DroppedFile = { name: file.name, kind: kindOf(file) }
   if (dropped.kind === "text") {
-    // Notes go to the agent as text, so the AI can keep the artist's voice.
+    // Notes and briefs go to the agent as text, so the AI can keep the
+    // artist's voice and details.
+    if (isPdfFile(file)) {
+      return readPdfText(file).then((content) =>
+        content ? { ...dropped, content } : dropped
+      )
+    }
     if (!file.type.startsWith("text/")) return Promise.resolve(dropped)
     return file
       .text()
@@ -50,6 +58,24 @@ function kindOf(file: File): DroppedFile["kind"] {
   if (isImageFile(file)) return "image"
   if (isAudioFile(file)) return "audio"
   return "text"
+}
+
+/** The text of a PDF (a release brief, a press kit), read in the browser. */
+async function readPdfText(file: File) {
+  try {
+    // Loaded on the first PDF drop, so it stays out of the initial bundle.
+    const { extractText } = await import("unpdf")
+    const { text } = await extractText(
+      new Uint8Array(await file.arrayBuffer()),
+      {
+        mergePages: true,
+      }
+    )
+    return text.trim().slice(0, 20_000)
+  } catch {
+    // A scanned or broken PDF still reaches the agent by name.
+    return undefined
+  }
 }
 
 // Tracks from one album usually carry the same artwork, so one copy is kept

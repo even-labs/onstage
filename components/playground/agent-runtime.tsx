@@ -308,7 +308,7 @@ function describePage(release: Release, files: DroppedFile[]) {
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
     "## Files the artist dropped",
     fileList,
-    notes && `## Artist notes\n${notes}`,
+    notes && `## Artist notes and briefs\n${notes}`,
     "## The page right now",
     "Extras marked kept or removed were decided by the artist; leave them unless asked.",
     JSON.stringify(page, null, 2),
