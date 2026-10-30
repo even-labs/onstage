@@ -1,6 +1,7 @@
 import {
   applyDraft,
   emptyRelease,
+  newTier,
   resolveQuestionsFor,
   trackField,
   type AiDraft,
@@ -9,6 +10,7 @@ import {
   type ExtraStatus,
   type QuestionField,
   type Release,
+  type Track,
 } from "@/lib/release"
 
 type TextField = "title" | "artist" | "description"
@@ -31,13 +33,31 @@ export type ReleaseAction =
     }
   | { type: "setTierPrice"; name: string; price: number }
   | { type: "toggleQuestion"; index: number }
+  /** Puts back a release as it was, to undo a removal. */
+  | { type: "restore"; release: Release }
+  | { type: "addTracks"; tracks: Track[] }
+  | { type: "removeTrack"; file: string }
+  | { type: "removeCover" }
+  | { type: "removePhoto"; file: string }
+  | { type: "addTier" }
+  | { type: "renameTier"; name: string; to: string }
+  | { type: "removeTier"; name: string }
+  | { type: "toggleTierItem"; tier: string; item: string }
+  | { type: "addExtra"; id: string }
+  | { type: "setExtraTier"; id: string; tier: string }
+  | { type: "removeExtra"; id: string }
 
 /** The artist touched this field, so it no longer counts as AI-written. */
 function unmarkAi(aiFields: string[], field: string) {
   return aiFields.filter((f) => f !== field)
 }
 
-/** The page field an artist's action fills in, for resolving draft questions. */
+/**
+ * The page field an artist's action fills in, for resolving draft questions.
+ * Only single-value fields count: filling in the artist name answers "what's
+ * the artist name?", but keeping one extra doesn't answer a question about
+ * another one, so questions about lists are checked off by hand.
+ */
 function answeredField(action: ReleaseAction): QuestionField | null {
   switch (action.type) {
     case "edit":
@@ -46,17 +66,6 @@ function answeredField(action: ReleaseAction): QuestionField | null {
       return action.value ? "release_date" : null
     case "setCover":
       return "cover"
-    case "addPhotos":
-      return "photos"
-    case "renameTrack":
-    case "moveTrack":
-    case "toggleBonus":
-      return "tracks"
-    case "setExtraStatus":
-    case "editExtra":
-      return "extras"
-    case "setTierPrice":
-      return "tiers"
     default:
       return null
   }
@@ -137,6 +146,8 @@ function applyAction(state: Release, action: ReleaseAction): Release {
       const extra = state.extras.find((e) => e.id === action.id)
       if (!extra) return state
       const renamed = action.patch.name ?? extra.name
+      // Tiers point at extras by name, so names must stay unique and non-empty.
+      if (!extraNameAvailable(state, renamed, extra.id)) return state
       return {
         ...state,
         extras: state.extras.map((e) =>
@@ -165,5 +176,149 @@ function applyAction(state: Release, action: ReleaseAction): Release {
           i === action.index ? { ...q, resolved: !q.resolved } : q
         ),
       }
+
+    case "restore":
+      return action.release
+
+    case "addTracks": {
+      const known = new Set(state.tracks.map((t) => t.file))
+      const added = action.tracks.filter((t) => !known.has(t.file))
+      return added.length
+        ? { ...state, tracks: [...state.tracks, ...added] }
+        : state
+    }
+
+    case "removeTrack":
+      return {
+        ...state,
+        tracks: state.tracks.filter((t) => t.file !== action.file),
+        aiFields: unmarkAi(state.aiFields, trackField(action.file)),
+      }
+
+    case "removeCover":
+      return { ...state, cover: null }
+
+    case "removePhoto":
+      return { ...state, photos: state.photos.filter((p) => p !== action.file) }
+
+    case "addTier":
+      return { ...state, tiers: [...state.tiers, newTier(state.tiers)] }
+
+    case "renameTier": {
+      const to = action.to.trim()
+      if (!to || state.tiers.some((t) => t.name === to)) return state
+      return {
+        ...state,
+        tiers: state.tiers.map((t) =>
+          t.name === action.name ? { ...t, name: to } : t
+        ),
+        extras: state.extras.map((e) =>
+          e.tier === action.name ? { ...e, tier: to } : e
+        ),
+      }
+    }
+
+    case "removeTier": {
+      const tiers = state.tiers.filter((t) => t.name !== action.name)
+      const fallback = [...tiers].sort((a, b) => a.price_usd - b.price_usd)[0]
+      return {
+        ...state,
+        tiers,
+        extras: state.extras.map((e) =>
+          e.tier === action.name ? { ...e, tier: fallback?.name ?? "" } : e
+        ),
+      }
+    }
+
+    case "toggleTierItem":
+      return {
+        ...state,
+        tiers: state.tiers.map((t) =>
+          t.name !== action.tier
+            ? t
+            : {
+                ...t,
+                includes: t.includes.includes(action.item)
+                  ? t.includes.filter((i) => i !== action.item)
+                  : [...t.includes, action.item],
+              }
+        ),
+      }
+
+    case "addExtra": {
+      if (!state.tiers.length) return state
+      const names = new Set(state.extras.map((e) => e.name))
+      let name = "New extra"
+      for (let n = 2; names.has(name); n++) name = `New extra ${n}`
+      // Land it in the cheapest tier above the base one, when there is one.
+      const byPrice = [...state.tiers].sort((a, b) => a.price_usd - b.price_usd)
+      const tier = byPrice[1] ?? byPrice[0]
+      const extra: Extra = {
+        id: action.id,
+        name,
+        description: "",
+        why_it_fits: "",
+        tier: tier.name,
+        status: "kept",
+        source: "manual",
+      }
+      return includeFromTier(
+        { ...state, extras: [...state.extras, extra] },
+        name,
+        tier.name
+      )
+    }
+
+    case "setExtraTier": {
+      const extra = state.extras.find((e) => e.id === action.id)
+      if (!extra) return state
+      return includeFromTier(
+        {
+          ...state,
+          extras: state.extras.map((e) =>
+            e.id === action.id ? { ...e, tier: action.tier } : e
+          ),
+        },
+        extra.name,
+        action.tier
+      )
+    }
+
+    case "removeExtra": {
+      const extra = state.extras.find((e) => e.id === action.id)
+      if (!extra) return state
+      return {
+        ...state,
+        extras: state.extras.filter((e) => e.id !== action.id),
+        tiers: state.tiers.map((t) => ({
+          ...t,
+          includes: t.includes.filter((i) => i !== extra.name),
+        })),
+      }
+    }
   }
+}
+
+/** An extra first unlocks in `tierName` and in every pricier tier after it. */
+function includeFromTier(state: Release, item: string, tierName: string) {
+  const from = state.tiers.find((t) => t.name === tierName)
+  if (!from) return state
+  return {
+    ...state,
+    tiers: state.tiers.map((t) => {
+      const others = t.includes.filter((i) => i !== item)
+      return {
+        ...t,
+        includes: t.price_usd >= from.price_usd ? [...others, item] : others,
+      }
+    }),
+  }
+}
+
+/** Whether an extra can take `name` without clashing with another extra. */
+export function extraNameAvailable(state: Release, name: string, id: string) {
+  return (
+    name.trim() !== "" &&
+    !state.extras.some((e) => e.id !== id && e.name === name.trim())
+  )
 }

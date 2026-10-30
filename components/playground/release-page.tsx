@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useAuiState } from "@assistant-ui/react"
-import { CheckIcon, LockIcon, UploadIcon } from "lucide-react"
+import { CheckIcon, LockIcon, PlusIcon, UploadIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import { useAgent } from "@/components/playground/agent-runtime"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
 import { Slot, TrackList } from "@/components/playground/track-list"
+import { useRemoveWithUndo } from "@/components/playground/use-remove-with-undo"
 import { assetUrl, isImageFile, registerAssets } from "@/lib/assets"
 import { DEMO_FILES, FALLBACK_ART, MOCK_ART } from "@/lib/mock-data"
 import {
@@ -21,7 +22,10 @@ import {
   minPrice,
   releaseType,
   tierPrice,
+  type Extra,
+  type Tier,
 } from "@/lib/release"
+import { extraNameAvailable } from "@/lib/release-reducer"
 import { cn } from "@/lib/utils"
 
 /** A real dropped image when there is one, otherwise the mock gradient for that name. */
@@ -281,6 +285,7 @@ function CoverArt() {
   const { release, mode, dispatch } = usePlayground()
   const running = useAuiState((s) => s.thread.isRunning)
   const editing = mode === "edit"
+  const removeWithUndo = useRemoveWithUndo()
 
   async function setCover(images: File[]) {
     const [cover, ...rest] = await registerAssets(images)
@@ -327,13 +332,15 @@ function CoverArt() {
   const realImage = Boolean(assetUrl(release.cover))
 
   return (
-    <>
+    <div className="group/cover relative w-full max-w-[240px] @xl:max-w-none">
       <div
         role="img"
         aria-label={`Cover art: ${release.cover}`}
-        title={editing ? "Drop a new image to replace the cover" : undefined}
+        title={
+          editing ? "Click or drop an image to replace the cover" : undefined
+        }
         className={cn(
-          "grid aspect-square w-full max-w-[240px] content-end justify-items-start rounded-md p-3 text-[13px] font-extrabold tracking-[0.08em] text-[#ffd9a8] uppercase shadow-lg @xl:max-w-none",
+          "grid aspect-square w-full content-end justify-items-start rounded-md p-3 text-[13px] font-extrabold tracking-[0.08em] text-[#ffd9a8] uppercase shadow-lg",
           editing &&
             "cursor-pointer outline-2 outline-offset-4 outline-transparent transition-[outline-color] hover:outline-zinc-500",
           drop.over && "outline-zinc-300"
@@ -344,14 +351,28 @@ function CoverArt() {
       >
         {!realImage && release.title}
       </div>
-      {editing && picker.input}
-    </>
+      {editing && (
+        <>
+          <Button
+            variant="secondary"
+            size="icon-sm"
+            aria-label="Remove the cover"
+            className="absolute top-2 right-2 opacity-0 group-hover/cover:opacity-100 focus-visible:opacity-100"
+            onClick={() => removeWithUndo({ type: "removeCover" }, "the cover")}
+          >
+            <XIcon />
+          </Button>
+          {picker.input}
+        </>
+      )}
+    </div>
   )
 }
 
 function Photos() {
   const { release, mode, dispatch } = usePlayground()
   const editing = mode === "edit"
+  const removeWithUndo = useRemoveWithUndo()
 
   async function addPhotos(images: File[]) {
     const files = await registerAssets(images)
@@ -394,14 +415,30 @@ function Photos() {
       {...dropProps}
     >
       {release.photos.map((photo) => (
-        <div
-          key={photo}
-          role="img"
-          aria-label={photo}
-          title={photo}
-          className="size-14 rounded-md border"
-          style={art(photo)}
-        />
+        <div key={photo} className="group/photo relative">
+          <div
+            role="img"
+            aria-label={photo}
+            title={photo}
+            className="size-14 rounded-md border"
+            style={art(photo)}
+          />
+          {editing && (
+            <button
+              type="button"
+              aria-label={`Remove ${photo}`}
+              className="absolute -top-2 -right-2 grid size-6 place-items-center rounded-full border bg-background text-muted-foreground opacity-0 group-hover/photo:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-zinc-200"
+              onClick={() =>
+                removeWithUndo(
+                  { type: "removePhoto", file: photo },
+                  "the photo"
+                )
+              }
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          )}
+        </div>
       ))}
       {editing && (
         <>
@@ -425,22 +462,16 @@ function Photos() {
 }
 
 export function AccessTiers() {
-  const { release, mode, dispatch } = usePlayground()
+  const { release, mode } = usePlayground()
   const editing = mode === "edit"
-  const running = useAuiState((s) => s.thread.isRunning)
 
-  if (!release.tiers.length) {
-    return editing ? (
-      <Slot pending={running}>Tiers appear here: what each price unlocks</Slot>
-    ) : null
-  }
+  if (editing) return <AccessEditor />
+  if (!release.tiers.length) return null
 
-  // Fans only see what the artist kept; while editing, suggestions still show.
+  // Fans only see the extras the artist kept or added.
   const hidden = new Set(
     release.extras
-      .filter(
-        (e) => e.status === "removed" || (!editing && e.status === "suggested")
-      )
+      .filter((e) => e.status === "removed" || e.status === "suggested")
       .map((e) => e.name)
   )
   const tiers = [...release.tiers].sort((a, b) => a.price_usd - b.price_usd)
@@ -454,34 +485,9 @@ export function AccessTiers() {
         >
           <div className="flex items-baseline justify-between gap-2 text-sm">
             <b>{tier.name}</b>
-            {editing ? (
-              <label className="flex items-baseline font-semibold tabular-nums">
-                $
-                <input
-                  key={tier.price_usd}
-                  type="number"
-                  min={1}
-                  defaultValue={tier.price_usd}
-                  aria-label={`${tier.name} price`}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur()
-                  }}
-                  onBlur={(e) => {
-                    const price = Number(e.currentTarget.value)
-                    if (price > 0 && price !== tier.price_usd) {
-                      dispatch({ type: "setTierPrice", name: tier.name, price })
-                    } else {
-                      e.currentTarget.value = String(tier.price_usd)
-                    }
-                  }}
-                  className="w-12 [appearance:textfield] rounded-sm bg-transparent outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-200 focus-visible:outline-solid [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              </label>
-            ) : (
-              <span className="font-semibold tabular-nums">
-                ${tier.price_usd}
-              </span>
-            )}
+            <span className="font-semibold tabular-nums">
+              ${tier.price_usd}
+            </span>
           </div>
           <ul className="grid gap-1 text-[13px] text-zinc-300">
             {tier.includes
@@ -496,6 +502,245 @@ export function AccessTiers() {
         </div>
       ))}
     </div>
+  )
+}
+
+/** The Access tab in Edit mode: tiers and the extras they unlock, all editable by hand. */
+function AccessEditor() {
+  const { release, dispatch } = usePlayground()
+  const running = useAuiState((s) => s.thread.isRunning)
+  const tiers = [...release.tiers].sort((a, b) => a.price_usd - b.price_usd)
+  const extras = release.extras.filter((e) => e.status !== "removed")
+
+  return (
+    <div className="grid gap-6">
+      <section className="grid gap-3">
+        <h3 className="text-sm font-semibold">Tiers</h3>
+        {tiers.length === 0 && (
+          <Slot pending={running}>
+            Tiers appear here: what each price unlocks
+          </Slot>
+        )}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5">
+          {tiers.map((tier) => (
+            <TierEditor key={tier.name} tier={tier} extras={extras} />
+          ))}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="justify-self-start"
+          onClick={() => dispatch({ type: "addTier" })}
+        >
+          <PlusIcon />
+          Add tier
+        </Button>
+      </section>
+      <ExtrasEditor />
+    </div>
+  )
+}
+
+function TierEditor({ tier, extras }: { tier: Tier; extras: Extra[] }) {
+  const { release, dispatch } = usePlayground()
+  const removeWithUndo = useRemoveWithUndo()
+
+  return (
+    <div className="grid content-start gap-2 rounded-lg border bg-card/80 p-3.5">
+      <div className="flex items-center gap-2 text-sm">
+        <EditableText
+          value={tier.name}
+          placeholder="Tier name"
+          editable
+          onCommit={(to) => {
+            if (release.tiers.some((t) => t.name === to.trim())) {
+              toast("Another tier already has that name")
+            }
+            dispatch({ type: "renameTier", name: tier.name, to })
+          }}
+          className="min-w-0 flex-1 font-bold"
+        />
+        <label className="flex items-baseline font-semibold tabular-nums">
+          $
+          <input
+            key={tier.price_usd}
+            type="number"
+            min={1}
+            defaultValue={tier.price_usd}
+            aria-label={`${tier.name} price`}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur()
+            }}
+            onBlur={(e) => {
+              const price = Number(e.currentTarget.value)
+              if (price > 0 && price !== tier.price_usd) {
+                dispatch({ type: "setTierPrice", name: tier.name, price })
+              } else {
+                e.currentTarget.value = String(tier.price_usd)
+              }
+            }}
+            className="h-7 w-12 [appearance:textfield] rounded-sm bg-transparent outline-1 outline-offset-2 outline-transparent outline-dashed hover:outline-zinc-500 focus-visible:outline-2 focus-visible:outline-zinc-200 focus-visible:outline-solid [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        </label>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Remove the ${tier.name} tier`}
+          className="text-muted-foreground"
+          onClick={() =>
+            removeWithUndo(
+              { type: "removeTier", name: tier.name },
+              `the “${tier.name}” tier`
+            )
+          }
+        >
+          <XIcon />
+        </Button>
+      </div>
+      <ul className="grid gap-1 text-[13px] text-zinc-300">
+        <li className="flex min-h-6 items-center gap-2">
+          <CheckIcon className="size-3.5 shrink-0 text-success" />
+          The record
+        </li>
+        {extras.map((extra) => (
+          <li key={extra.id}>
+            <label className="flex min-h-6 cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={tier.includes.includes(extra.name)}
+                onChange={() =>
+                  dispatch({
+                    type: "toggleTierItem",
+                    tier: tier.name,
+                    item: extra.name,
+                  })
+                }
+                className="size-3.5 shrink-0 accent-zinc-200"
+              />
+              <span className="min-w-0 truncate">{extra.name}</span>
+              {extra.status === "suggested" && (
+                <span className="shrink-0 text-muted-foreground">
+                  · suggested
+                </span>
+              )}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * Extras on the page: the ones the artist added by hand or kept from the AI's
+ * suggestions. Suggestions still to decide on wait in the review column.
+ */
+function ExtrasEditor() {
+  const { release, dispatch } = usePlayground()
+  const removeWithUndo = useRemoveWithUndo()
+  const onPage = release.extras.filter(
+    (e) => e.source === "manual" || e.status === "kept"
+  )
+  const tiers = [...release.tiers].sort((a, b) => a.price_usd - b.price_usd)
+
+  return (
+    <section className="grid gap-3">
+      <h3 className="text-sm font-semibold">Extras</h3>
+      {onPage.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          What a tier unlocks beyond the record: a lyric book, an early listen,
+          a listening party.
+        </p>
+      )}
+      <div className="grid gap-2.5">
+        {onPage.map((extra) => (
+          <div
+            key={extra.id}
+            className="grid gap-1.5 rounded-lg border bg-card/80 p-3 text-sm"
+          >
+            <div className="flex items-center gap-2">
+              <EditableText
+                value={extra.name}
+                placeholder="Extra name"
+                editable
+                onCommit={(name) => {
+                  if (!extraNameAvailable(release, name, extra.id)) {
+                    toast("Extras need a name no other extra uses")
+                  }
+                  dispatch({ type: "editExtra", id: extra.id, patch: { name } })
+                }}
+                className="min-w-0 flex-1 font-bold"
+              />
+              <select
+                value={extra.tier}
+                aria-label={`Tier that unlocks ${extra.name}`}
+                onChange={(e) =>
+                  dispatch({
+                    type: "setExtraTier",
+                    id: extra.id,
+                    tier: e.target.value,
+                  })
+                }
+                className="h-7 max-w-40 rounded-md border bg-background px-2 text-xs"
+              >
+                {tiers.map((t) => (
+                  <option key={t.name} value={t.name}>
+                    {t.name} · ${t.price_usd}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Remove ${extra.name}`}
+                className="text-muted-foreground"
+                onClick={() =>
+                  removeWithUndo(
+                    extra.source === "manual"
+                      ? { type: "removeExtra", id: extra.id }
+                      : {
+                          type: "setExtraStatus",
+                          id: extra.id,
+                          status: "removed",
+                        },
+                    `“${extra.name}”`
+                  )
+                }
+              >
+                <XIcon />
+              </Button>
+            </div>
+            <EditableText
+              value={extra.description}
+              placeholder="What fans get"
+              editable
+              multiline
+              onCommit={(description) =>
+                dispatch({
+                  type: "editExtra",
+                  id: extra.id,
+                  patch: { description },
+                })
+              }
+              className="text-zinc-300"
+            />
+          </div>
+        ))}
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="justify-self-start"
+        disabled={!release.tiers.length}
+        title={release.tiers.length ? undefined : "Add a tier first"}
+        onClick={() =>
+          dispatch({ type: "addExtra", id: `manual-${crypto.randomUUID()}` })
+        }
+      >
+        <PlusIcon />
+        Add extra
+      </Button>
+    </section>
   )
 }
 

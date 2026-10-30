@@ -14,7 +14,7 @@ import { lastAssistantMessageIsCompleteWithToolCalls } from "ai"
 import { z } from "zod"
 
 import { usePlayground } from "@/components/playground/playground-provider"
-import { registerAsset } from "@/lib/assets"
+import { registerAssets } from "@/lib/assets"
 import { DEMO_FILES, LUMA_VALE_DRAFT, SUGGESTED_PROMPTS } from "@/lib/mock-data"
 import { aiDraftSchema, type DroppedFile, type Release } from "@/lib/release"
 
@@ -42,12 +42,28 @@ function mergeFiles(current: DroppedFile[], added: DroppedFile[]) {
   return [...current.filter((f) => !names.has(f.name)), ...added]
 }
 
-const describeFile = (f: DroppedFile) =>
-  `${f.name} (${[f.kind, f.duration].filter(Boolean).join(", ")})`
+/** One line per file for the model: name, type, duration and any audio tags. */
+function describeFile(f: DroppedFile) {
+  const details = [f.kind, f.duration].filter(Boolean).join(", ")
+  const tags = f.tags
+    ? Object.entries(f.tags)
+        .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+        .join(", ")
+    : ""
+  return [
+    `${f.name} (${details})`,
+    tags && `tags {${tags}}`,
+    f.embeddedCover && `embedded cover: ${f.embeddedCover}`,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+}
 
 type AgentContextValue = {
   /** Hand dropped files to the agent and ask for a first pass. */
   sendFiles: (files: DroppedFile[]) => void
+  /** Let the agent know about files the artist added by hand, without asking it anything. */
+  rememberFiles: (files: DroppedFile[]) => void
   /** Fill the page with the saved first pass, without calling Claude. */
   loadSavedDraft: () => void
   /** Clear the page and the conversation. */
@@ -90,9 +106,9 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
   )
 
   // Files attached in the chat are handled like files dropped on the page:
-  // registered locally for the page to show, with only their names, types and
-  // durations sent to Claude. Uploading them would hit Vercel's 4.5 MB request
-  // limit, and Claude can't read audio anyway.
+  // registered locally for the page to show, with only their names, types,
+  // durations and tags sent to Claude. Uploading them would hit Vercel's
+  // 4.5 MB request limit, and Claude can't read audio anyway.
   const attachments = React.useMemo<AttachmentAdapter>(
     () => ({
       accept: "*",
@@ -107,8 +123,9 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
         }
       },
       async send(attachment) {
-        const dropped = await registerAsset(attachment.file)
-        changeFiles((current) => mergeFiles(current, [dropped]))
+        // An audio file can bring its embedded cover along as a second file.
+        const [dropped, ...extras] = await registerAssets([attachment.file])
+        changeFiles((current) => mergeFiles(current, [dropped, ...extras]))
         return {
           ...attachment,
           status: { type: "complete" },
@@ -154,6 +171,9 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
       sendFiles(added) {
         changeFiles((current) => mergeFiles(current, added))
         runtime.thread.append(DROP_PROMPT)
+      },
+      rememberFiles(added) {
+        changeFiles((current) => mergeFiles(current, added))
       },
       loadSavedDraft() {
         changeFiles(() => DEMO_FILES)

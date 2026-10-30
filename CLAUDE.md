@@ -81,6 +81,11 @@ whose Zod schema is the JSON contract below (`aiDraftSchema` in `lib/release.ts`
 state and dropped files reach the model as client context. `ANTHROPIC_API_KEY` and the
 optional `ANTHROPIC_MODEL` go in `.env.local`. Never put an API key in client code or commit
 it. "Load the saved draft" on the empty page fills it from `LUMA_VALE_DRAFT` without a call.
+Dropped audio is never uploaded: `lib/assets.ts` reads its duration, tags (title, track
+number, artist, album, year, ISRC) and embedded cover in the browser with `music-metadata`,
+and only that metadata reaches Claude. In Edit mode everything Claude can do is also a
+visible control: add tracks (from audio files or by title), remove tracks, cover and photos,
+and add, rename, price and remove tiers and extras in the Access tab.
 
 ## AI first-pass contract
 

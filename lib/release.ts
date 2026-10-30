@@ -10,6 +10,21 @@ export type DroppedFile = {
   url?: string
   /** Text files only: what the artist wrote, passed to the AI as notes. */
   content?: string
+  /** Audio only: tags read from the file itself (see lib/assets.ts). */
+  tags?: AudioTags
+  /** Audio only: name of the cover art embedded in the file, registered as an image. */
+  embeddedCover?: string
+}
+
+/** What an audio file says about itself in its ID3, Vorbis or MP4 tags. */
+export type AudioTags = {
+  title?: string
+  artist?: string
+  album?: string
+  track?: number
+  year?: number
+  isrc?: string
+  genre?: string
 }
 
 /** Page fields a draft question can point at. */
@@ -118,6 +133,8 @@ export type ExtraStatus = "suggested" | "kept" | "removed"
 export type Extra = AiDraft["extras"][number] & {
   id: string
   status: ExtraStatus
+  /** Suggested by the AI, or added by the artist in the Access tab. */
+  source: "ai" | "manual"
 }
 
 /** The single source of truth both edit and publish modes render from. */
@@ -162,6 +179,7 @@ export function toExtras(draftExtras: AiDraft["extras"]): Extra[] {
     ...extra,
     id: `${slugify(extra.name)}-${i}`,
     status: "suggested",
+    source: "ai",
   }))
 }
 
@@ -202,11 +220,15 @@ export function applyDraft(
   }
   if (draft.extras) {
     // Keep the artist's Keep/Remove decisions on extras the AI sends again.
+    // Extras the artist added by hand stay as they are.
     const decided = new Map(release.extras.map((e) => [e.name, e.status]))
-    next.extras = toExtras(draft.extras).map((e) => ({
-      ...e,
-      status: decided.get(e.name) ?? e.status,
-    }))
+    next.extras = [
+      ...toExtras(draft.extras).map((e) => ({
+        ...e,
+        status: decided.get(e.name) ?? e.status,
+      })),
+      ...release.extras.filter((e) => e.source === "manual"),
+    ]
   }
   if (draft.tiers) next.tiers = draft.tiers
   if (draft.release_date) next.releaseDate = draft.release_date
@@ -273,6 +295,60 @@ export function formatDate(iso: string) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(iso))
+}
+
+/** Tracks added by hand without a file get an id in place of a file name. */
+export const MANUAL_TRACK_PREFIX = "manual:"
+
+export const isManualTrack = (track: Track) =>
+  track.file.startsWith(MANUAL_TRACK_PREFIX)
+
+/**
+ * A track title from a messy file name: "03_window seat MIX v2.wav" becomes
+ * "Window Seat". The AI pass does this better; this is the by-hand version.
+ */
+export function cleanTitle(fileName: string) {
+  const noise = /^(master|mix|final|v\d+|\d+bit|\d{1,2})$/i
+  return fileName
+    .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/[()[\]]/g, " ")
+    .split(/[\s_-]+/)
+    .filter((word) => word && !noise.test(word))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
+/**
+ * Tracks for audio files the artist adds by hand. Titles and order come from
+ * the files' own tags when they have them, else from the file names.
+ */
+export function tracksFromFiles(files: DroppedFile[]): Track[] {
+  return files
+    .filter((f) => f.kind === "audio")
+    .sort(
+      (a, b) =>
+        (a.tags?.track ?? Number.MAX_SAFE_INTEGER) -
+        (b.tags?.track ?? Number.MAX_SAFE_INTEGER)
+    )
+    .map((f) => ({
+      file: f.name,
+      title: f.tags?.title || cleanTitle(f.name) || f.name,
+      duration: f.duration ?? "",
+      bonus: /voice memo|demo|bonus/i.test(f.tags?.title ?? f.name),
+    }))
+}
+
+/** A new tier for the Access tab: a free name, priced above the current top tier. */
+export function newTier(tiers: Tier[]): Tier {
+  const names = new Set(tiers.map((t) => t.name))
+  let n = tiers.length + 1
+  while (names.has(`Tier ${n}`)) n++
+  const top = Math.max(0, ...tiers.map((t) => t.price_usd))
+  return {
+    name: tiers.length ? `Tier ${n}` : "Listen",
+    price_usd: tiers.length ? top + 5 : 7,
+    includes: ["the record"],
+  }
 }
 
 export function slugify(text: string) {

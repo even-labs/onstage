@@ -53,7 +53,11 @@ export function EditableText({
       }}
       onBlur={(e) => {
         const next = (e.currentTarget.textContent ?? "").trim()
-        if (next !== value) onCommit(next)
+        if (next === value) return
+        onCommit(next)
+        // Show the stored value again: an accepted change remounts this
+        // element with the new value, a rejected one leaves the old text.
+        e.currentTarget.textContent = value
       }}
       className={cn(
         // Editability shows on hover only, in a neutral color; focus gets a

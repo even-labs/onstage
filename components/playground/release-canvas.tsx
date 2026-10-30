@@ -13,9 +13,9 @@ import { cn } from "@/lib/utils"
  * review: everything the artist acts on that fans never see.
  */
 export function ReleaseCanvas() {
-  const { viewport, mode, release } = usePlayground()
+  const { viewport, mode, release, reviewOpen } = usePlayground()
   const page = mode === "edit" ? <ReleasePage /> : <FanPage />
-  const showReview = mode !== "publish" && !isEmpty(release)
+  const showReview = reviewOpen && mode !== "publish" && !isEmpty(release)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-card/30 lg:flex-row lg:overflow-hidden">

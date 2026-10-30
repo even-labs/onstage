@@ -4,6 +4,7 @@ import {
   EyeIcon,
   LoaderCircleIcon,
   MonitorIcon,
+  PanelRightIcon,
   PencilIcon,
   SaveIcon,
   SmartphoneIcon,
@@ -22,11 +23,22 @@ import {
 import { missingBeforePublish, slugify } from "@/lib/release"
 
 export function BuilderToolbar() {
-  const { release, mode, setMode, viewport, setViewport, zoom } =
-    usePlayground()
+  const {
+    release,
+    mode,
+    setMode,
+    viewport,
+    setViewport,
+    zoom,
+    reviewOpen,
+    setReviewOpen,
+  } = usePlayground()
   const running = useAuiState((s) => s.thread.isRunning)
   const missing = missingBeforePublish(release)
   const openQuestions = release.questions.filter((q) => !q.resolved).length
+  const toReview =
+    openQuestions +
+    release.extras.filter((e) => e.status === "suggested").length
   const isDraft =
     release.aiFields.length > 0 ||
     release.extras.some((e) => e.status === "suggested")
@@ -149,6 +161,25 @@ export function BuilderToolbar() {
           <Button variant="outline" size="sm" onClick={() => setMode("edit")}>
             <PencilIcon />
             Back to editing
+          </Button>
+        )}
+
+        {mode !== "publish" && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="relative"
+            aria-label={reviewOpen ? "Hide draft review" : "Show draft review"}
+            aria-pressed={reviewOpen}
+            title={reviewOpen ? "Hide draft review" : "Show draft review"}
+            onClick={() => setReviewOpen(!reviewOpen)}
+          >
+            <PanelRightIcon />
+            {!reviewOpen && toReview > 0 && (
+              <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-ai text-[10px] font-bold text-background tabular-nums">
+                {toReview}
+              </span>
+            )}
           </Button>
         )}
       </div>

@@ -8,6 +8,7 @@ import { AiTag } from "@/components/playground/brand"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
 import { missingBeforePublish, tierPrice, type Extra } from "@/lib/release"
+import { extraNameAvailable } from "@/lib/release-reducer"
 import { cn } from "@/lib/utils"
 
 /**
@@ -78,7 +79,9 @@ function Questions() {
 
 function SuggestedExtras() {
   const { release } = usePlayground()
-  if (!release.extras.length) return null
+  // Extras the artist added by hand live in the Access tab, not here.
+  const suggested = release.extras.filter((e) => e.source === "ai")
+  if (!suggested.length) return null
 
   return (
     <section className="grid gap-2.5">
@@ -89,7 +92,7 @@ function SuggestedExtras() {
         Releases with extras tend to sell better. Keep what fits.
       </p>
       <div className="grid gap-2.5">
-        {release.extras.map((extra) => (
+        {suggested.map((extra) => (
           <ExtraCard key={extra.id} extra={extra} />
         ))}
       </div>
@@ -124,9 +127,12 @@ function ExtraCard({ extra }: { extra: Extra }) {
         value={extra.name}
         placeholder="Extra name"
         editable={extra.status !== "removed"}
-        onCommit={(name) =>
+        onCommit={(name) => {
+          if (!extraNameAvailable(release, name, extra.id)) {
+            toast("Extras need a name no other extra uses")
+          }
           dispatch({ type: "editExtra", id: extra.id, patch: { name } })
-        }
+        }}
         className="font-bold"
       />
       <span className="font-semibold tabular-nums">
