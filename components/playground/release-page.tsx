@@ -19,6 +19,7 @@ import { AiTag, Wordmark } from "@/components/playground/brand"
 import { EditableText } from "@/components/playground/editable-text"
 import { usePlayground } from "@/components/playground/playground-provider"
 import { Slot, TrackList } from "@/components/playground/track-list"
+import { assetUrl, isImageFile, registerAssets } from "@/lib/assets"
 import { DROP_PROMPT } from "@/lib/mock-agent"
 import { DEMO_FILES, FALLBACK_ART, MOCK_ART } from "@/lib/mock-data"
 import {
@@ -28,12 +29,79 @@ import {
   minPrice,
   releaseType,
   tierPrice,
-  type DroppedFile,
   type Extra,
 } from "@/lib/release"
 import { cn } from "@/lib/utils"
 
-const art = (file: string) => MOCK_ART[file] ?? FALLBACK_ART
+/** A real dropped image when there is one, otherwise the mock gradient for that name. */
+function art(file: string): React.CSSProperties {
+  const url = assetUrl(file)
+  if (url) {
+    return {
+      backgroundImage: `url("${url}")`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    }
+  }
+  return { background: MOCK_ART[file] ?? FALLBACK_ART }
+}
+
+const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files")
+
+/**
+ * Makes a slot accept image files dropped straight onto it, without going
+ * through the agent. The drop stops there so the page-level handler never sees it.
+ */
+function useImageDrop(onImages: (files: File[]) => void) {
+  const [over, setOver] = React.useState(false)
+  return {
+    over,
+    handlers: {
+      onDragEnter: (e: React.DragEvent) => {
+        if (hasFiles(e)) setOver(true)
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.stopPropagation()
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setOver(false)
+        }
+      },
+      onDrop: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.stopPropagation()
+        setOver(false)
+        const images = Array.from(e.dataTransfer.files).filter(isImageFile)
+        if (images.length) onImages(images)
+        else toast("Drop an image here, or drop everything on the page")
+      },
+    },
+  }
+}
+
+/** A hidden file input opened from a click on a slot. */
+function useImagePicker(onImages: (files: File[]) => void) {
+  const ref = React.useRef<HTMLInputElement>(null)
+  const input = (
+    <input
+      ref={ref}
+      type="file"
+      accept="image/*"
+      multiple
+      hidden
+      onChange={(e) => {
+        const images = Array.from(e.target.files ?? []).filter(isImageFile)
+        if (images.length) onImages(images)
+        e.target.value = ""
+      }}
+    />
+  )
+  return { input, open: () => ref.current?.click() }
+}
 
 /** The frame around the page: desktop width or a ~390 px phone. */
 export function ReleaseCanvas() {
@@ -79,55 +147,45 @@ function FanNav() {
   )
 }
 
-function toDroppedFile(file: File): DroppedFile {
-  if (file.type.startsWith("image/")) return { name: file.name, kind: "image" }
-  if (file.type.startsWith("audio/")) return { name: file.name, kind: "audio" }
-  return { name: file.name, kind: "text" }
-}
-
 function ReleasePage() {
   const { release, mode, pending, sendToAgent } = usePlayground()
   const editing = mode === "edit"
   const [overlayDismissed, setOverlayDismissed] = React.useState(false)
   const [draggingFiles, setDraggingFiles] = React.useState(false)
+  // Once the page has content, a file drag no longer raises the overlay, so
+  // the cover and photo slots can take drops of their own.
   const showOverlay =
-    editing &&
-    !pending &&
-    (draggingFiles || (isEmpty(release) && !overlayDismissed))
+    editing && !pending && isEmpty(release) && !overlayDismissed
 
   // Track reordering is also a drag, so only react to drags that carry files.
-  const hasFiles = (e: React.DragEvent) =>
-    editing && e.dataTransfer.types.includes("Files")
+  const fileDrag = (e: React.DragEvent) => editing && hasFiles(e)
 
   return (
     <div
       className="relative p-4 @xl:p-7"
       onDragEnter={(e) => {
-        if (hasFiles(e)) setDraggingFiles(true)
+        if (fileDrag(e)) setDraggingFiles(true)
       }}
       onDragOver={(e) => {
-        if (hasFiles(e)) e.preventDefault()
+        if (fileDrag(e)) e.preventDefault()
       }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
           setDraggingFiles(false)
         }
       }}
-      onDrop={(e) => {
-        if (!hasFiles(e)) return
+      onDrop={async (e) => {
+        if (!fileDrag(e)) return
         e.preventDefault()
         setDraggingFiles(false)
-        sendToAgent(
-          DROP_PROMPT,
-          Array.from(e.dataTransfer.files).map(toDroppedFile)
-        )
+        sendToAgent(DROP_PROMPT, await registerAssets(e.dataTransfer.files))
       }}
     >
       {release.cover && (
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-35 blur-[40px]"
-          style={{ background: art(release.cover) }}
+          style={art(release.cover)}
         />
       )}
 
@@ -276,46 +334,120 @@ function Hero() {
 }
 
 function CoverArt() {
-  const { release, mode, pending } = usePlayground()
+  const { release, mode, pending, dispatch } = usePlayground()
+  const editing = mode === "edit"
+
+  async function setCover(images: File[]) {
+    const [cover, ...rest] = await registerAssets(images)
+    dispatch({ type: "setCover", file: cover.name })
+    if (rest.length) {
+      dispatch({ type: "addPhotos", files: rest.map((f) => f.name) })
+    }
+  }
+  const drop = useImageDrop(setCover)
+  const picker = useImagePicker(setCover)
+  const dropProps = editing ? drop.handlers : {}
 
   if (!release.cover) {
-    return mode === "edit" ? (
-      <Slot
-        pending={pending === "draft"}
-        className="grid aspect-square w-full max-w-[240px] place-items-center @xl:max-w-none"
+    return editing ? (
+      <>
+        <Slot
+          pending={pending === "draft"}
+          role="button"
+          tabIndex={0}
+          aria-label="Add cover art"
+          onClick={picker.open}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") picker.open()
+          }}
+          className={cn(
+            "grid aspect-square w-full max-w-[240px] cursor-pointer place-items-center @xl:max-w-none",
+            drop.over && "border-ai bg-ai-muted/30"
+          )}
+          {...dropProps}
+        >
+          <span>
+            Cover art
+            <br />
+            3000 × 3000
+            <br />
+            <span className="text-xs">drop or click</span>
+          </span>
+        </Slot>
+        {picker.input}
+      </>
+    ) : null
+  }
+
+  const realImage = Boolean(assetUrl(release.cover))
+
+  return (
+    <>
+      <div
+        role="img"
+        aria-label={`Cover art: ${release.cover}`}
+        title={editing ? "Drop a new image to replace the cover" : undefined}
+        className={cn(
+          "grid aspect-square w-full max-w-[240px] content-end justify-items-start rounded-md p-3 text-[13px] font-extrabold tracking-[0.08em] text-[#ffd9a8] uppercase shadow-lg @xl:max-w-none",
+          editing &&
+            "cursor-pointer outline-2 outline-offset-4 outline-transparent transition-[outline-color] hover:outline-ai/60",
+          drop.over && "outline-ai"
+        )}
+        onClick={editing ? picker.open : undefined}
+        style={art(release.cover)}
+        {...dropProps}
       >
-        <span>
-          Cover art
-          <br />
-          3000 × 3000
-        </span>
-      </Slot>
+        {!realImage && release.title}
+      </div>
+      {editing && picker.input}
+    </>
+  )
+}
+
+function Photos() {
+  const { release, mode, dispatch } = usePlayground()
+  const editing = mode === "edit"
+
+  async function addPhotos(images: File[]) {
+    const files = await registerAssets(images)
+    dispatch({ type: "addPhotos", files: files.map((f) => f.name) })
+  }
+  const drop = useImageDrop(addPhotos)
+  const picker = useImagePicker(addPhotos)
+  const dropProps = editing ? drop.handlers : {}
+
+  if (!release.photos.length) {
+    return editing ? (
+      <>
+        <Slot
+          role="button"
+          tabIndex={0}
+          aria-label="Add photos"
+          onClick={picker.open}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") picker.open()
+          }}
+          className={cn(
+            "w-fit cursor-pointer px-3 py-2 text-xs",
+            drop.over && "border-ai bg-ai-muted/30"
+          )}
+          {...dropProps}
+        >
+          Photos · drop or click
+        </Slot>
+        {picker.input}
+      </>
     ) : null
   }
 
   return (
     <div
-      role="img"
-      aria-label={`Cover art: ${release.cover}`}
-      className="grid aspect-square w-full max-w-[240px] content-end justify-items-start rounded-md p-3 text-[13px] font-extrabold tracking-[0.08em] text-[#ffd9a8] uppercase shadow-lg @xl:max-w-none"
-      style={{ background: art(release.cover) }}
+      className={cn(
+        "flex flex-wrap gap-2 rounded-md",
+        drop.over && "outline-2 outline-offset-4 outline-ai"
+      )}
+      {...dropProps}
     >
-      {release.title}
-    </div>
-  )
-}
-
-function Photos() {
-  const { release, mode } = usePlayground()
-
-  if (!release.photos.length) {
-    return mode === "edit" ? (
-      <Slot className="w-fit px-3 py-2 text-xs">Photos</Slot>
-    ) : null
-  }
-
-  return (
-    <div className="flex gap-2">
       {release.photos.map((photo) => (
         <div
           key={photo}
@@ -323,9 +455,26 @@ function Photos() {
           aria-label={photo}
           title={photo}
           className="size-14 rounded-md border"
-          style={{ background: art(photo) }}
+          style={art(photo)}
         />
       ))}
+      {editing && (
+        <>
+          <Slot
+            role="button"
+            tabIndex={0}
+            aria-label="Add photos"
+            onClick={picker.open}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") picker.open()
+            }}
+            className="grid size-14 cursor-pointer place-items-center p-0 text-lg leading-none"
+          >
+            +
+          </Slot>
+          {picker.input}
+        </>
+      )}
     </div>
   )
 }

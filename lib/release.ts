@@ -4,6 +4,8 @@ export type DroppedFile = {
   kind: "image" | "audio" | "text"
   /** Audio only, read from the file's metadata. */
   duration?: string
+  /** Object URL of a real dropped image or audio file (see lib/assets.ts). */
+  url?: string
 }
 
 export type Tier = {

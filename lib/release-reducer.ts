@@ -16,6 +16,8 @@ export type ReleaseAction =
   | { type: "reset" }
   | { type: "edit"; field: TextField; value: string; by?: "ai" }
   | { type: "setReleaseDate"; value: string }
+  | { type: "setCover"; file: string }
+  | { type: "addPhotos"; files: string[] }
   | { type: "renameTrack"; file: string; title: string }
   | { type: "moveTrack"; from: number; to: number }
   | { type: "toggleBonus"; file: string }
@@ -51,6 +53,18 @@ export function releaseReducer(state: Release, action: ReleaseAction): Release {
 
     case "setReleaseDate":
       return { ...state, releaseDate: action.value }
+
+    case "setCover":
+      return { ...state, cover: action.file }
+
+    case "addPhotos":
+      return {
+        ...state,
+        photos: [
+          ...state.photos,
+          ...action.files.filter((f) => !state.photos.includes(f)),
+        ],
+      }
 
     case "renameTrack":
       return {
