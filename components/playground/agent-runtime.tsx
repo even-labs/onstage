@@ -13,13 +13,20 @@ import {
 import { lastAssistantMessageIsCompleteWithToolCalls } from "ai"
 import { z } from "zod"
 
+import { useSidebar } from "@/components/ui/sidebar"
 import { usePlayground } from "@/components/playground/playground-provider"
 import { registerAssets } from "@/lib/assets"
 import { DEMO_FILES, LUMA_VALE_DRAFT, SUGGESTED_PROMPTS } from "@/lib/mock-data"
-import { aiDraftSchema, type DroppedFile, type Release } from "@/lib/release"
+import {
+  aiDraftSchema,
+  isEmpty,
+  type DroppedFile,
+  type Release,
+} from "@/lib/release"
 
 /** What the chat shows when the artist sends files without typing anything. */
 const DROP_PROMPT = "Lay out the release from these files"
+const ADD_PROMPT = "Add these files to the release"
 
 const partialDraftSchema = aiDraftSchema.partial()
 
@@ -60,8 +67,15 @@ function describeFile(f: DroppedFile) {
 }
 
 type AgentContextValue = {
-  /** Hand dropped files to the agent and ask for a first pass. */
+  /** Hand files to the agent and ask it to lay them out on the page. */
   sendFiles: (files: DroppedFile[]) => void
+  /** Files dropped or picked but not sent yet: the artist can keep adding. */
+  staged: DroppedFile[]
+  stageFiles: (files: DroppedFile[]) => void
+  unstageFile: (name: string) => void
+  clearStaged: () => void
+  /** Send the staged files to the agent. */
+  sendStaged: () => void
   /** Let the agent know about files the artist added by hand, without asking it anything. */
   rememberFiles: (files: DroppedFile[]) => void
   /** Fill the page with the saved first pass, without calling Claude. */
@@ -85,8 +99,10 @@ export function useAgent() {
  * update_release, that writes the AI first pass into the page.
  */
 export function AgentRuntime({ children }: { children: React.ReactNode }) {
-  const { release, dispatch } = usePlayground()
+  const { release, dispatch, setReviewOpen } = usePlayground()
+  const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const [files, setFiles] = React.useState<DroppedFile[]>([])
+  const [staged, setStaged] = React.useState<DroppedFile[]>([])
   // Mirrors of release and files for the model context, which is read when a
   // message is sent, possibly before React re-renders with the new values.
   const releaseRef = React.useRef(release)
@@ -158,19 +174,43 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
             return { ok: false, error: z.prettifyError(parsed.error) }
           }
           dispatch({ type: "applyDraft", draft: parsed.data, files })
+          // New suggestions or questions: open the review column beside the page.
+          if (parsed.data.extras?.length || parsed.data.questions?.length) {
+            setReviewOpen(true)
+          }
           return { ok: true, updated: Object.keys(parsed.data) }
         },
       },
     }),
-    [dispatch, files]
+    [dispatch, files, setReviewOpen]
   )
   const config = AuiConfig({ tools: Tools({ toolkit }) })
 
-  const agent = React.useMemo<AgentContextValue>(
-    () => ({
-      sendFiles(added) {
-        changeFiles((current) => mergeFiles(current, added))
-        runtime.thread.append(DROP_PROMPT)
+  const agent = React.useMemo<AgentContextValue>(() => {
+    // The chat opens as soon as the agent starts, so the artist sees it work.
+    const openChat = () => (isMobile ? setOpenMobile(true) : setOpen(true))
+    const sendFiles = (added: DroppedFile[]) => {
+      const firstPass = isEmpty(releaseRef.current)
+      changeFiles((current) => mergeFiles(current, added))
+      openChat()
+      runtime.thread.append(firstPass ? DROP_PROMPT : ADD_PROMPT)
+    }
+    return {
+      sendFiles,
+      staged,
+      stageFiles(added) {
+        setStaged((current) => mergeFiles(current, added))
+      },
+      unstageFile(name) {
+        setStaged((current) => current.filter((f) => f.name !== name))
+      },
+      clearStaged() {
+        setStaged([])
+      },
+      sendStaged() {
+        if (!staged.length) return
+        sendFiles(staged)
+        setStaged([])
       },
       rememberFiles(added) {
         changeFiles((current) => mergeFiles(current, added))
@@ -182,15 +222,29 @@ export function AgentRuntime({ children }: { children: React.ReactNode }) {
           draft: LUMA_VALE_DRAFT,
           files: DEMO_FILES,
         })
+        setReviewOpen(true)
       },
       startOver() {
+        // Back to the first screen: empty page, both side panels closed.
         changeFiles(() => [])
+        setStaged([])
         dispatch({ type: "reset" })
         runtime.thread.reset()
+        setReviewOpen(false)
+        if (isMobile) setOpenMobile(false)
+        else setOpen(false)
       },
-    }),
-    [changeFiles, dispatch, runtime]
-  )
+    }
+  }, [
+    changeFiles,
+    dispatch,
+    isMobile,
+    runtime,
+    setOpen,
+    setOpenMobile,
+    setReviewOpen,
+    staged,
+  ])
 
   return (
     <AssistantRuntimeProvider runtime={runtime} config={config}>

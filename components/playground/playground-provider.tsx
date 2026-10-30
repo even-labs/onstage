@@ -48,7 +48,8 @@ export function PlaygroundProvider({
   const [mode, setMode] = React.useState<Mode>("edit")
   const [viewport, setViewport] = React.useState<Viewport>("desktop")
   const [zoom, setZoom] = React.useState(100)
-  const [reviewOpen, setReviewOpen] = React.useState(true)
+  // Closed on the first screen; it opens when the AI has something to review.
+  const [reviewOpen, setReviewOpen] = React.useState(false)
 
   return (
     <PlaygroundContext.Provider

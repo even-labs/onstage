@@ -8,7 +8,10 @@ import { ReleaseCanvas } from "@/components/playground/release-canvas"
 /** Agent chat on the left, the release being built on the right. */
 export function Playground() {
   return (
+    // The chat starts collapsed: the first screen is just the page. It opens
+    // when the artist hands the agent something to work on.
     <SidebarProvider
+      defaultOpen={false}
       style={{ "--sidebar-width": "22rem" } as React.CSSProperties}
     >
       <PlaygroundProvider>

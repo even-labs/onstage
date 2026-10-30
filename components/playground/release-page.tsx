@@ -2,7 +2,17 @@
 
 import * as React from "react"
 import { useAuiState } from "@assistant-ui/react"
-import { CheckIcon, LockIcon, PlusIcon, UploadIcon, XIcon } from "lucide-react"
+import {
+  AudioLinesIcon,
+  CheckIcon,
+  FileTextIcon,
+  ImageIcon,
+  LockIcon,
+  PlusIcon,
+  SparklesIcon,
+  UploadIcon,
+  XIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -101,7 +111,7 @@ function useImagePicker(onImages: (files: File[]) => void) {
 /** The release page in Edit mode: every slot is editable in place. */
 export function ReleasePage() {
   const { release, mode } = usePlayground()
-  const { sendFiles } = useAgent()
+  const { stageFiles, staged } = useAgent()
   const running = useAuiState((s) => s.thread.isRunning)
   const editing = mode === "edit"
   const [overlayDismissed, setOverlayDismissed] = React.useState(false)
@@ -116,7 +126,12 @@ export function ReleasePage() {
 
   return (
     <div
-      className="relative p-4 @xl:p-7"
+      className={cn(
+        "relative p-4 @xl:p-7",
+        draggingFiles &&
+          !isEmpty(release) &&
+          "outline-2 -outline-offset-8 outline-zinc-500 outline-dashed"
+      )}
       onDragEnter={(e) => {
         if (fileDrag(e)) setDraggingFiles(true)
       }}
@@ -132,7 +147,8 @@ export function ReleasePage() {
         if (!fileDrag(e)) return
         e.preventDefault()
         setDraggingFiles(false)
-        sendFiles(await registerAssets(e.dataTransfer.files))
+        // Files pile up until the artist says go, so they can keep adding.
+        stageFiles(await registerAssets(e.dataTransfer.files))
       }}
     >
       {release.cover && (
@@ -173,6 +189,8 @@ export function ReleasePage() {
         </Tabs>
         <Includes />
       </div>
+
+      {editing && !isEmpty(release) && staged.length > 0 && <StagedTray />}
 
       {showOverlay && (
         <DropOverlay
@@ -776,6 +794,79 @@ export function Includes() {
   )
 }
 
+const KIND_ICON = {
+  audio: AudioLinesIcon,
+  image: ImageIcon,
+  text: FileTextIcon,
+} as const
+
+/** Files waiting to go to the agent, with what was read from them. */
+function StagedFileList() {
+  const { staged, unstageFile } = useAgent()
+
+  return (
+    <ul className="grid max-h-56 w-full gap-1 overflow-y-auto text-left text-sm">
+      {staged.map((f) => {
+        const Icon = KIND_ICON[f.kind]
+        return (
+          <li
+            key={f.name}
+            className="flex items-center gap-2 rounded-md bg-muted/40 py-1 pr-1 pl-2.5"
+          >
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate" title={f.name}>
+              {f.tags?.title ? (
+                <>
+                  {f.tags.title}{" "}
+                  <span className="text-muted-foreground">· {f.name}</span>
+                </>
+              ) : (
+                f.name
+              )}
+            </span>
+            {f.duration && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {f.duration}
+              </span>
+            )}
+            <button
+              type="button"
+              aria-label={`Remove ${f.name}`}
+              className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-zinc-200"
+              onClick={() => unstageFile(f.name)}
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Files dropped on a page that already has content, waiting to be sent. */
+function StagedTray() {
+  const { staged, sendStaged, clearStaged } = useAgent()
+
+  return (
+    <div className="sticky bottom-4 z-10 mx-auto mt-6 grid w-full max-w-md gap-3 rounded-xl border bg-background/95 p-4 shadow-2xl backdrop-blur">
+      <div className="flex items-center justify-between text-sm">
+        <b>
+          {staged.length} file{staged.length === 1 ? "" : "s"} ready
+        </b>
+        <Button variant="ghost" size="sm" onClick={clearStaged}>
+          Clear
+        </Button>
+      </div>
+      <StagedFileList />
+      <Button onClick={sendStaged}>
+        <SparklesIcon />
+        Send to Claude
+      </Button>
+    </div>
+  )
+}
+
 function DropOverlay({
   dragging,
   onDismiss,
@@ -783,9 +874,17 @@ function DropOverlay({
   dragging: boolean
   onDismiss: () => void
 }) {
-  const { sendFiles, loadSavedDraft } = useAgent()
+  const {
+    staged,
+    stageFiles,
+    clearStaged,
+    sendStaged,
+    sendFiles,
+    loadSavedDraft,
+  } = useAgent()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const fileInput = React.useRef<HTMLInputElement>(null)
+  const hasStaged = staged.length > 0
 
   function describeInstead() {
     if (isMobile) setOpenMobile(true)
@@ -800,22 +899,44 @@ function DropOverlay({
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-background/50 p-4">
-      <div className="grid max-w-[420px] justify-items-center gap-3 rounded-xl border-2 border-dashed border-zinc-600 bg-background/95 px-6 py-7 text-center @xl:px-9">
+      <div className="grid w-full max-w-[440px] justify-items-center gap-3 rounded-xl border-2 border-dashed border-zinc-600 bg-background/95 px-6 py-7 text-center @xl:px-9">
         <UploadIcon className="size-6 text-muted-foreground" />
-        <b className="text-lg">Drop everything here</b>
+        <b className="text-lg">
+          {hasStaged ? "Add anything else" : "Drop everything here"}
+        </b>
         <p className="text-sm text-muted-foreground">
-          Cover, photos, tracks, voice notes. Claude lays out the page the way
-          fans will see it.
+          {hasStaged
+            ? "Keep dropping files. When you're ready, Claude lays out the page the way fans will see it."
+            : "Cover, photos, tracks, voice notes. Claude lays out the page the way fans will see it."}
         </p>
+        {hasStaged && <StagedFileList />}
         {!dragging && (
           <>
             <div className="flex flex-wrap justify-center gap-2 pt-1">
-              <Button onClick={() => fileInput.current?.click()}>
-                Choose files
-              </Button>
-              <Button variant="outline" onClick={describeInstead}>
-                Describe it instead
-              </Button>
+              {hasStaged ? (
+                <>
+                  <Button onClick={sendStaged}>
+                    <SparklesIcon />
+                    Lay out the release
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    <PlusIcon />
+                    Add more files
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={() => fileInput.current?.click()}>
+                    Choose files
+                  </Button>
+                  <Button variant="outline" onClick={describeInstead}>
+                    Describe it instead
+                  </Button>
+                </>
+              )}
               <input
                 ref={fileInput}
                 type="file"
@@ -824,42 +945,53 @@ function DropOverlay({
                 onChange={async (e) => {
                   const files = Array.from(e.target.files ?? [])
                   e.target.value = ""
-                  if (files.length) sendFiles(await registerAssets(files))
+                  if (files.length) stageFiles(await registerAssets(files))
                 }}
               />
             </div>
-            <details className="text-sm text-muted-foreground">
-              <summary className="cursor-pointer py-1">
-                More ways to start
-              </summary>
-              <div className="flex flex-wrap justify-center">
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={() => sendFiles(DEMO_FILES)}
-                >
-                  Use demo files
-                </Button>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="text-muted-foreground"
-                  title="Fills the page with a saved first pass, without calling Claude"
-                  onClick={loadSavedDraft}
-                >
-                  Load the saved draft
-                </Button>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={onDismiss}
-                >
-                  Fill it in by hand
-                </Button>
-              </div>
-            </details>
+            {hasStaged ? (
+              <Button
+                variant="link"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={clearStaged}
+              >
+                Clear the list
+              </Button>
+            ) : (
+              <details className="text-sm text-muted-foreground">
+                <summary className="cursor-pointer py-1">
+                  More ways to start
+                </summary>
+                <div className="flex flex-wrap justify-center">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={() => sendFiles(DEMO_FILES)}
+                  >
+                    Use demo files
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-muted-foreground"
+                    title="Fills the page with a saved first pass, without calling Claude"
+                    onClick={loadSavedDraft}
+                  >
+                    Load the saved draft
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={onDismiss}
+                  >
+                    Fill it in by hand
+                  </Button>
+                </div>
+              </details>
+            )}
           </>
         )}
       </div>
